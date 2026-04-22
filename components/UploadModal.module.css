@@ -1,0 +1,124 @@
+.title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  padding-right: 32px;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+.subjectSelect {
+  margin-bottom: 16px;
+}
+
+.zone {
+  margin-bottom: 16px;
+  cursor: pointer;
+}
+
+.zoneIcon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.zoneText {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.zoneHint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.previews {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.previewItem {
+  position: relative;
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.previewImg {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.removeBtn {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: #ef4444;
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.previewName {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.progressBar {
+  margin-bottom: 16px;
+}
+
+.progressText {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.bar {
+  height: 4px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  background: var(--gradient-main);
+  animation: progress 1.5s ease-in-out infinite;
+}
+
+@keyframes progress {
+  0% { width: 10%; margin-left: 0; }
+  50% { width: 60%; margin-left: 20%; }
+  100% { width: 10%; margin-left: 90%; }
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}

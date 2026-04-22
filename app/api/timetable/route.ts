@@ -1,0 +1,70 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { getAuthenticatedUser, dayNameToNumber, randomColor } from "@/lib/utils";
+import { analyzeImageWithGemini, TIMETABLE_PROMPT } from "@/lib/gemini";
+
+export async function POST(req: NextRequest) {
+  const { user, error } = await getAuthenticatedUser();
+  if (error) return error;
+
+  try {
+    const formData = await req.formData();
+    const image = formData.get("image") as File;
+
+    if (!image) {
+      return NextResponse.json({ error: "画像が見つかりません" }, { status: 400 });
+    }
+
+    const HAS_API_KEY = !!process.env.GEMINI_API_KEY;
+    let parsedSubjects: any[] = [];
+
+    if (!HAS_API_KEY) {
+      parsedSubjects = [
+        { name: "デモ: AI基礎論", dayOfWeek: "月", period: 1, professor: "田中教授", room: "101教室" },
+        { name: "デモ: データ科学", dayOfWeek: "火", period: 3, professor: null, room: null },
+        { name: "デモ: プログラミング演習", dayOfWeek: "水", period: 2, professor: "鈴木教授", room: "PC室A" },
+        { name: "デモ: 数理統計学", dayOfWeek: "木", period: 4, professor: null, room: null },
+        { name: "デモ: 情報理論", dayOfWeek: "金", period: 1, professor: "佐藤教授", room: "302教室" },
+      ];
+    } else {
+      const bytes = await image.arrayBuffer();
+      const base64 = Buffer.from(bytes).toString("base64");
+      const resultText = await analyzeImageWithGemini(base64, image.type, TIMETABLE_PROMPT);
+      const parsed = JSON.parse(resultText);
+      parsedSubjects = parsed.subjects || [];
+    }
+
+    const createdSubjects = [];
+    for (const s of parsedSubjects) {
+      const existing = await prisma.subject.findFirst({
+        where: { userId: user!.id, name: s.name },
+      });
+      if (existing) continue;
+
+      const subject = await prisma.subject.create({
+        data: {
+          userId: user!.id,
+          name: s.name,
+          color: randomColor(),
+          professor: s.professor || null,
+          room: s.room || null,
+          schedules: {
+            create: {
+              dayOfWeek: dayNameToNumber(s.dayOfWeek),
+              period: parseInt(s.period) || 1,
+              startTime: s.startTime || null,
+              endTime: s.endTime || null,
+            },
+          },
+        },
+        include: { schedules: true },
+      });
+      createdSubjects.push(subject);
+    }
+
+    return NextResponse.json({ success: true, subjects: createdSubjects, count: createdSubjects.length });
+  } catch (err: any) {
+    console.error("Timetable error:", err);
+    return NextResponse.json({ error: "時間割の解析に失敗しました", details: err.message }, { status: 500 });
+  }
+}

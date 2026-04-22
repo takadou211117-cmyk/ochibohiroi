@@ -1,0 +1,120 @@
+.container {
+  padding: 32px 40px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.pageTitle {
+  font-size: 28px;
+  font-weight: 800;
+  margin-bottom: 8px;
+  letter-spacing: -0.02em;
+}
+
+.pageSubtitle {
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+
+.timetableWrapper {
+  overflow-x: auto;
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.timetableGrid {
+  display: grid;
+  grid-template-columns: 40px repeat(6, minmax(140px, 1fr));
+  gap: 8px;
+  min-width: 800px;
+}
+
+.headerCell {
+  text-align: center;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 8px 0;
+  font-size: 14px;
+}
+
+.periodCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: var(--text-muted);
+  font-size: 18px;
+}
+
+.slotCell {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm);
+  min-height: 110px;
+  padding: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+}
+
+.slotCell:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.hasSubject {
+  background: rgba(255, 255, 255, 0.05);
+  border-style: solid;
+  border-left: 4px solid var(--slot-color);
+  border-color: var(--border-color);
+  border-left-color: var(--slot-color);
+}
+
+.hasSubject:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.subjectContent {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.subjectName {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.subjectMeta {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.editModal {
+  max-width: 480px;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 20px;
+  }
+}

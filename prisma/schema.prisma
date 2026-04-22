@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id         String    @id @default(cuid())
+  email      String    @unique
+  password   String
+  name       String?
+  age        Int?
+  grade      Int?
+  school     String?
+  department String?
+  role       String    @default("user")
+  subjects   Subject[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model Subject {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  color     String?
+  emoji     String?
+  professor String?
+  room      String?
+  schedules Schedule[]
+  sessions  LectureSession[]
+  notes     Note[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+}
+
+model Schedule {
+  id        String  @id @default(cuid())
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  dayOfWeek Int
+  period    Int
+  startTime String?
+  endTime   String?
+}
+
+model LectureSession {
+  id         String   @id @default(cuid())
+  subjectId  String
+  subject    Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  date       DateTime
+  sessionNum Int      @default(1)
+  photos     Photo[]
+  note       Note?
+  createdAt  DateTime @default(now())
+}
+
+model Photo {
+  id         String         @id @default(cuid())
+  sessionId  String
+  session    LectureSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  url        String
+  storageKey String?
+  memo       String?
+  takenAt    DateTime?
+  isFavorite Boolean        @default(false)
+  sortOrder  Int            @default(0)
+  createdAt  DateTime       @default(now())
+}
+
+model Note {
+  id         String          @id @default(cuid())
+  subjectId  String
+  subject    Subject         @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  sessionId  String?         @unique
+  session    LectureSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  title      String
+  content    String
+  isFavorite Boolean         @default(false)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+}

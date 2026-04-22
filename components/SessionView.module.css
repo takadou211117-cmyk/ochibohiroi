@@ -1,0 +1,213 @@
+.container {
+  padding: 32px 40px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.headerContent {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  color: var(--text-secondary);
+  font-size: 15px;
+  margin-top: 4px;
+}
+
+.content {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 32px;
+}
+
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.photoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.photoCard {
+  position: relative;
+  aspect-ratio: 4/3;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.photoCard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+  border-color: var(--accent-1);
+}
+
+.photoImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photoMemoPreview {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  padding: 6px 8px;
+  font-size: 11px;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deletePhotoBtn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.5);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s;
+}
+
+.photoCard:hover .deletePhotoBtn {
+  opacity: 1;
+}
+
+.deletePhotoBtn:hover {
+  background: #ef4444;
+  border-color: #ef4444;
+}
+
+.noteHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.noteCard {
+  padding: 32px;
+  min-height: 400px;
+}
+
+.emptyCard {
+  padding: 40px 20px;
+  text-align: center;
+  background: rgba(255,255,255,0.02);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* Photo Modal specific styles */
+.photoModal {
+  background: #0d0d1f;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  width: 90vw;
+  max-width: 1200px;
+  height: 85vh;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  animation: fadeInUp 0.3s ease;
+  overflow: hidden;
+}
+
+.photoModalLayout {
+  display: flex;
+  height: 100%;
+}
+
+.photoModalImgContainer {
+  flex: 1;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.photoModalImg {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.photoModalSidebar {
+  width: 320px;
+  background: rgba(255,255,255,0.02);
+  border-left: 1px solid var(--border-color);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.memoView {
+  padding: 16px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  line-height: 1.6;
+  cursor: pointer;
+  transition: background 0.2s;
+  min-height: 100px;
+}
+
+.memoView:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+@media (max-width: 1024px) {
+  .content {
+    grid-template-columns: 1fr;
+  }
+  .photoModalLayout {
+    flex-direction: column;
+  }
+  .photoModalSidebar {
+    width: 100%;
+    height: 300px;
+    border-left: none;
+    border-top: 1px solid var(--border-color);
+  }
+}
