@@ -98,9 +98,9 @@ export default function UploadModal({ type, subjects, onClose, onSuccess, addToa
         onSuccess(data);
       } else {
         setProgress(`${files.length}枚の写真を圧縮中...`);
-        for (const file of files) {
-          const compressed = await compressImage(file);
-          formData.append("photos", compressed);
+        const compressedFiles = await Promise.all(files.map(f => compressImage(f)));
+        for (const file of compressedFiles) {
+          formData.append("photos", file);
         }
         if (selectedSubjectId) formData.append("subjectId", selectedSubjectId);
         setProgress(`${files.length}枚の写真をアップロード中...`);
