@@ -66,59 +66,76 @@ export async function POST(req: NextRequest) {
       console.log(`[Timetable] Parsed ${parsedSubjects.length} subjects`);
     }
 
-    const createdSubjects = [];
+    // メモリ上で科目名ごとにグループ化（複数コマの同名科目の重複作成を防ぐため）
+    const subjectsMap = new Map();
     for (const s of parsedSubjects) {
-      if (!s.name || !s.dayOfWeek) {
-        console.log("[Timetable] Skipping invalid subject:", s);
-        continue;
-      }
-
+      if (!s.name || !s.dayOfWeek) continue;
       const dayOfWeek = dayNameToNumber(s.dayOfWeek);
       const period = typeof s.period === "number" ? s.period : parseInt(s.period) || 1;
 
-      const existing = await prisma.subject.findFirst({
-        where: { userId: user!.id, name: s.name },
-      });
-      if (existing) {
-        console.log(`[Timetable] Subject already exists: ${s.name}, appending schedule`);
-        const existingSchedule = await prisma.schedule.findFirst({
-          where: { subjectId: existing.id, dayOfWeek, period },
-        });
-        if (!existingSchedule) {
-          await prisma.schedule.create({
-            data: {
-              subjectId: existing.id,
-              dayOfWeek,
-              period,
-              startTime: s.startTime || null,
-              endTime: s.endTime || null,
-            }
-          });
-        }
-        continue;
-      }
-
-      const subject = await prisma.subject.create({
-        data: {
-          userId: user!.id,
+      if (!subjectsMap.has(s.name)) {
+        subjectsMap.set(s.name, {
           name: s.name,
-          color: randomColor(),
           professor: s.professor || null,
           room: s.room || null,
-          schedules: {
-            create: {
-              dayOfWeek,
-              period,
-              startTime: s.startTime || null,
-              endTime: s.endTime || null,
-            },
-          },
-        },
-        include: { schedules: true },
+          schedules: []
+        });
+      }
+      subjectsMap.get(s.name).schedules.push({
+        dayOfWeek,
+        period,
+        startTime: s.startTime || null,
+        endTime: s.endTime || null,
       });
-      createdSubjects.push(subject);
-      console.log(`[Timetable] Created subject: ${s.name} (${s.dayOfWeek} ${period}限)`);
     }
+
+    // 科目ごとに並列でDBに保存（超高速化）
+    const createdSubjects = await Promise.all(
+      Array.from(subjectsMap.values()).map(async (s) => {
+        const existing = await prisma.subject.findFirst({
+          where: { userId: user!.id, name: s.name },
+        });
+
+        if (existing) {
+          console.log(`[Timetable] Subject already exists: ${s.name}, checking schedules`);
+          // 既存科目の場合、スケジュールを並列で追加
+          await Promise.all(s.schedules.map(async (sch: any) => {
+            const existingSch = await prisma.schedule.findFirst({
+              where: { subjectId: existing.id, dayOfWeek: sch.dayOfWeek, period: sch.period },
+            });
+            if (!existingSch) {
+              await prisma.schedule.create({
+                data: {
+                  subjectId: existing.id,
+                  dayOfWeek: sch.dayOfWeek,
+                  period: sch.period,
+                  startTime: sch.startTime,
+                  endTime: sch.endTime,
+                }
+              });
+            }
+          }));
+          return existing;
+        } else {
+          // 新規科目の場合、すべてのスケジュールを一度に作成（ネスト作成で1クエリに！）
+          console.log(`[Timetable] Creating new subject: ${s.name} with ${s.schedules.length} schedules`);
+          const subject = await prisma.subject.create({
+            data: {
+              userId: user!.id,
+              name: s.name,
+              color: randomColor(),
+              professor: s.professor,
+              room: s.room,
+              schedules: {
+                create: s.schedules,
+              },
+            },
+            include: { schedules: true },
+          });
+          return subject;
+        }
+      })
+    );
 
     return NextResponse.json({ success: true, subjects: createdSubjects, count: createdSubjects.length });
   } catch (err: any) {
