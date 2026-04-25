@@ -29,17 +29,74 @@ export async function POST(req: NextRequest) {
     } else {
       const bytes = await image.arrayBuffer();
       const base64 = Buffer.from(bytes).toString("base64");
+      
+      console.log("[Timetable] Starting AI analysis...");
+      console.log("[Timetable] Image type:", image.type, "Size:", bytes.byteLength, "bytes");
+      
       const resultText = await analyzeImageWithGemini(base64, image.type, TIMETABLE_PROMPT);
-      const parsed = JSON.parse(resultText);
-      parsedSubjects = parsed.subjects || [];
+      console.log("[Timetable] AI result:", resultText.substring(0, 500));
+      
+      // JSON パース（より堅牢に）
+      let parsed: any;
+      try {
+        parsed = JSON.parse(resultText);
+      } catch (parseErr) {
+        console.error("[Timetable] JSON parse failed, attempting to extract JSON...");
+        console.error("[Timetable] Raw text:", resultText);
+        
+        // JSON部分を抽出する試み
+        const jsonMatch = resultText.match(/\{[\s\S]*"subjects"[\s\S]*\}/);
+        if (jsonMatch) {
+          try {
+            parsed = JSON.parse(jsonMatch[0]);
+          } catch (e) {
+            throw new Error(`AIの応答をJSONとしてパースできませんでした: ${resultText.substring(0, 200)}`);
+          }
+        } else {
+          throw new Error(`AIの応答にsubjectsデータが見つかりません: ${resultText.substring(0, 200)}`);
+        }
+      }
+
+      parsedSubjects = parsed.subjects || parsed.Subjects || [];
+      
+      if (!Array.isArray(parsedSubjects)) {
+        throw new Error("AIの応答からsubjects配列を取得できませんでした");
+      }
+      
+      console.log(`[Timetable] Parsed ${parsedSubjects.length} subjects`);
     }
 
     const createdSubjects = [];
     for (const s of parsedSubjects) {
+      if (!s.name || !s.dayOfWeek) {
+        console.log("[Timetable] Skipping invalid subject:", s);
+        continue;
+      }
+
+      const dayOfWeek = dayNameToNumber(s.dayOfWeek);
+      const period = typeof s.period === "number" ? s.period : parseInt(s.period) || 1;
+
       const existing = await prisma.subject.findFirst({
         where: { userId: user!.id, name: s.name },
       });
-      if (existing) continue;
+      if (existing) {
+        console.log(`[Timetable] Subject already exists: ${s.name}, appending schedule`);
+        const existingSchedule = await prisma.schedule.findFirst({
+          where: { subjectId: existing.id, dayOfWeek, period },
+        });
+        if (!existingSchedule) {
+          await prisma.schedule.create({
+            data: {
+              subjectId: existing.id,
+              dayOfWeek,
+              period,
+              startTime: s.startTime || null,
+              endTime: s.endTime || null,
+            }
+          });
+        }
+        continue;
+      }
 
       const subject = await prisma.subject.create({
         data: {
@@ -50,8 +107,8 @@ export async function POST(req: NextRequest) {
           room: s.room || null,
           schedules: {
             create: {
-              dayOfWeek: dayNameToNumber(s.dayOfWeek),
-              period: parseInt(s.period) || 1,
+              dayOfWeek,
+              period,
               startTime: s.startTime || null,
               endTime: s.endTime || null,
             },
@@ -60,11 +117,15 @@ export async function POST(req: NextRequest) {
         include: { schedules: true },
       });
       createdSubjects.push(subject);
+      console.log(`[Timetable] Created subject: ${s.name} (${s.dayOfWeek} ${period}限)`);
     }
 
     return NextResponse.json({ success: true, subjects: createdSubjects, count: createdSubjects.length });
   } catch (err: any) {
     console.error("Timetable error:", err);
-    return NextResponse.json({ error: "時間割の解析に失敗しました", details: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: "時間割の解析に失敗しました", details: err.message },
+      { status: 500 }
+    );
   }
 }

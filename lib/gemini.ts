@@ -2,32 +2,80 @@ import { GoogleGenAI } from "@google/genai";
 
 const apiKey = process.env.GEMINI_API_KEY;
 
+// メインモデルとフォールバック
+const PRIMARY_MODEL = "gemini-2.5-flash";
+const FALLBACK_MODEL = "gemini-2.0-flash";
+
 export function getGeminiClient() {
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
   return new GoogleGenAI({ apiKey });
 }
 
+/**
+ * レスポンステキストからMarkdownコードブロックを除去
+ */
+function cleanResponseText(text: string): string {
+  if (!text) return "";
+  // ```json ... ``` や ``` ... ``` を除去
+  let cleaned = text.trim();
+  // マッチする場合のみ中身を取り出す
+  const codeBlockMatch = cleaned.match(/^```(?:json|markdown)?\s*\n?([\s\S]*?)\n?\s*```$/i);
+  if (codeBlockMatch) {
+    cleaned = codeBlockMatch[1].trim();
+  }
+  return cleaned;
+}
+
+/**
+ * 単一画像のAI解析（時間割パース用）
+ */
 export async function analyzeImageWithGemini(
   imageBase64: string,
   mimeType: string,
   prompt: string
 ): Promise<string> {
   const ai = getGeminiClient();
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-pro",
-    contents: [
-      {
-        role: "user",
-        parts: [
-          { text: prompt },
-          { inlineData: { mimeType, data: imageBase64 } },
+  
+  let lastError: Error | null = null;
+  
+  for (const model of [PRIMARY_MODEL, FALLBACK_MODEL]) {
+    try {
+      console.log(`[Gemini] Using model: ${model} for image analysis`);
+      const response = await ai.models.generateContent({
+        model,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: prompt },
+              { inlineData: { mimeType, data: imageBase64 } },
+            ],
+          },
         ],
-      },
-    ],
-  });
-  return response.text?.replace(/```json/g, "").replace(/```/g, "").trim() || "";
+      });
+
+      const rawText = response.text || "";
+      console.log(`[Gemini] Raw response (first 500 chars): ${rawText.substring(0, 500)}`);
+      
+      if (!rawText.trim()) {
+        throw new Error("Empty response from Gemini API");
+      }
+
+      return cleanResponseText(rawText);
+    } catch (err: any) {
+      console.error(`[Gemini] Error with model ${model}:`, err.message);
+      lastError = err;
+      // フォールバックモデルで再試行
+      continue;
+    }
+  }
+
+  throw lastError || new Error("All Gemini models failed");
 }
 
+/**
+ * 複数画像のAI解析（ノート生成用）
+ */
 export async function analyzeMultipleImagesWithGemini(
   images: { base64: string; mimeType: string }[],
   prompt: string
@@ -37,11 +85,33 @@ export async function analyzeMultipleImagesWithGemini(
   for (const img of images) {
     parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
   }
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-pro",
-    contents: [{ role: "user", parts }],
-  });
-  return response.text?.trim() || "";
+
+  let lastError: Error | null = null;
+
+  for (const model of [PRIMARY_MODEL, FALLBACK_MODEL]) {
+    try {
+      console.log(`[Gemini] Using model: ${model} for ${images.length} images`);
+      const response = await ai.models.generateContent({
+        model,
+        contents: [{ role: "user", parts }],
+      });
+
+      const rawText = response.text || "";
+      console.log(`[Gemini] Response length: ${rawText.length} chars`);
+
+      if (!rawText.trim()) {
+        throw new Error("Empty response from Gemini API");
+      }
+
+      return cleanResponseText(rawText);
+    } catch (err: any) {
+      console.error(`[Gemini] Error with model ${model}:`, err.message);
+      lastError = err;
+      continue;
+    }
+  }
+
+  throw lastError || new Error("All Gemini models failed");
 }
 
 export const TIMETABLE_PROMPT = `
@@ -53,7 +123,7 @@ export const TIMETABLE_PROMPT = `
 1. 科目名が複数行に改行されている場合は、スペースなどを入れずに繋げて1つの文字列にしてください。
 2. セルの下部にある青いバッジのような数字（例：531、121）やテキスト（例：オンデマンド）は「教室名 (room)」として扱ってください。
 3. 同じ科目が連続する時限に入っている場合（例：4限と5限にまたがる）は、それぞれの時限ごとに独立したデータとして抽出してください。
-4. 出力は必ず以下のJSON形式のみとし、マークダウン（\`\`\`json など）やその他の説明文は一切含めないでください。
+4. 出力は必ず以下のJSON形式のみとし、マークダウン（\`\`\`json など）やその他の説明文は一切含めないでください。純粋なJSONのみを返してください。
 
 フォーマット:
 {

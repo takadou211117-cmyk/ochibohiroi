@@ -97,26 +97,42 @@ $$E = mc^2$$（例）
 `;
     } else {
       // 写真をBase64に変換してAIへ送信
+      console.log(`[Notes] Starting note generation for session ${sessionId}`);
+      console.log(`[Notes] Processing ${session.photos.length} photos`);
+
       const images: { base64: string; mimeType: string }[] = [];
       for (const photo of session.photos) {
-        if (photo.url.startsWith("data:")) {
-          const [header, data] = photo.url.split(",");
-          const mimeType = header.match(/data:([^;]+)/)?.[1] || "image/jpeg";
-          images.push({ base64: data, mimeType });
-        } else {
-          // URLから画像を取得
-          try {
+        try {
+          if (photo.url.startsWith("data:")) {
+            const [header, data] = photo.url.split(",");
+            const mimeType = header.match(/data:([^;]+)/)?.[1] || "image/jpeg";
+            images.push({ base64: data, mimeType });
+            console.log(`[Notes] Loaded inline photo (${mimeType})`);
+          } else {
+            // URLから画像を取得
+            console.log(`[Notes] Fetching photo from URL: ${photo.url.substring(0, 80)}...`);
             const res = await fetch(photo.url);
+            if (!res.ok) {
+              console.error(`[Notes] Failed to fetch photo: ${res.status} ${res.statusText}`);
+              continue;
+            }
             const buf = Buffer.from(await res.arrayBuffer());
             const mimeType = res.headers.get("content-type") || "image/jpeg";
             images.push({ base64: buf.toString("base64"), mimeType });
-          } catch (_) {}
+            console.log(`[Notes] Fetched photo (${mimeType}, ${buf.byteLength} bytes)`);
+          }
+        } catch (photoErr: any) {
+          console.error(`[Notes] Error processing photo ${photo.id}:`, photoErr.message);
+          // 1枚失敗しても他の写真は処理続行
+          continue;
         }
       }
 
       if (!images.length) {
-        return NextResponse.json({ error: "画像の読み込みに失敗しました" }, { status: 500 });
+        return NextResponse.json({ error: "画像の読み込みに失敗しました。写真のURLが無効な可能性があります。" }, { status: 500 });
       }
+
+      console.log(`[Notes] ${images.length}/${session.photos.length} photos loaded successfully`);
 
       const prompt = `${NOTE_GENERATION_PROMPT}
 
@@ -127,6 +143,11 @@ $$E = mc^2$$（例）
 以下の${images.length}枚の板書写真を元にノートを作成してください。`;
 
       content = await analyzeMultipleImagesWithGemini(images, prompt);
+      console.log(`[Notes] Generated note: ${content.length} chars`);
+
+      if (!content || content.length < 10) {
+        return NextResponse.json({ error: "AIがノートを生成できませんでした。再度お試しください。" }, { status: 500 });
+      }
     }
 
     // 既存ノートを更新 or 新規作成
