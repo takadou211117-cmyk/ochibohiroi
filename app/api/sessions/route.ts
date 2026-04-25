@@ -4,6 +4,8 @@ import { getAuthenticatedUser } from "@/lib/utils";
 import { analyzeMultipleImagesWithGemini, detectSubjectFromTimestamp } from "@/lib/gemini";
 import { uploadPhoto } from "@/lib/supabase";
 
+export const maxDuration = 60;
+
 // GET: セッション一覧
 export async function GET(req: NextRequest) {
   const { user, error } = await getAuthenticatedUser();

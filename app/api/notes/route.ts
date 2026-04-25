@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/utils";
 import { analyzeMultipleImagesWithGemini, NOTE_GENERATION_PROMPT } from "@/lib/gemini";
 
+export const maxDuration = 60;
+
 // GET: ノート取得
 export async function GET(req: NextRequest) {
   const { user, error } = await getAuthenticatedUser();

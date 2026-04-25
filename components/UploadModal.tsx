@@ -2,6 +2,54 @@
 import { useState, useRef } from "react";
 import styles from "./UploadModal.module.css";
 
+const compressImage = async (file: File, maxWidth = 1600, quality = 0.7): Promise<File> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxWidth) {
+            width = Math.round((width * maxWidth) / height);
+            height = maxWidth;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return resolve(file);
+
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              resolve(new File([blob], file.name, { type: "image/jpeg", lastModified: Date.now() }));
+            } else {
+              resolve(file);
+            }
+          },
+          "image/jpeg",
+          quality
+        );
+      };
+      img.onerror = () => resolve(file);
+    };
+    reader.onerror = () => resolve(file);
+  });
+};
+
 interface UploadModalProps {
   type: "timetable" | "board";
   subjects: any[];
@@ -40,14 +88,20 @@ export default function UploadModal({ type, subjects, onClose, onSuccess, addToa
     try {
       const formData = new FormData();
       if (type === "timetable") {
-        formData.append("image", files[0]);
+        setProgress("画像を圧縮中...");
+        const compressed = await compressImage(files[0]);
+        formData.append("image", compressed);
         setProgress("AIが時間割を解析中...");
         const res = await fetch("/api/timetable", { method: "POST", body: formData });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         onSuccess(data);
       } else {
-        for (const file of files) formData.append("photos", file);
+        setProgress(`${files.length}枚の写真を圧縮中...`);
+        for (const file of files) {
+          const compressed = await compressImage(file);
+          formData.append("photos", compressed);
+        }
         if (selectedSubjectId) formData.append("subjectId", selectedSubjectId);
         setProgress(`${files.length}枚の写真をアップロード中...`);
         const res = await fetch("/api/sessions", { method: "POST", body: formData });
