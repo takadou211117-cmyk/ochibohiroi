@@ -147,6 +147,10 @@ export default function RegisterPage() {
             <input type="text" name="department" className="input" value={form.department} onChange={handleChange} placeholder="理学部情報科学科" />
           </div>
 
+          <p style={{ fontSize: "12px", color: "var(--text-secondary)", textAlign: "center", marginBottom: "16px" }}>
+            アカウントを作成することにより、<Link href="/terms" style={{ color: "var(--primary)" }}>利用規約</Link>に同意したものとみなされます。
+          </p>
+
           <button type="submit" className={`btn btn-primary ${styles.submitBtn}`} disabled={loading}>
             {loading ? (
               <>

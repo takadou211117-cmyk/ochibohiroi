@@ -96,6 +96,12 @@ export default function LoginPage() {
             新規登録
           </Link>
         </p>
+
+        <div style={{ textAlign: "center", marginTop: "20px" }}>
+          <Link href="/terms" style={{ fontSize: "12px", color: "var(--text-secondary)", textDecoration: "underline" }}>
+            利用規約
+          </Link>
+        </div>
       </div>
     </div>
   );
