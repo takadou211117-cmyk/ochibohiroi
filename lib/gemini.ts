@@ -52,6 +52,9 @@ export async function analyzeImageWithGemini(
             ],
           },
         ],
+        config: {
+          responseMimeType: "application/json",
+        },
       });
 
       const rawText = response.text || "";

@@ -89,7 +89,7 @@ export default function UploadModal({ type, subjects, onClose, onSuccess, addToa
       const formData = new FormData();
       if (type === "timetable") {
         setProgress("画像を圧縮中...");
-        const compressed = await compressImage(files[0]);
+        const compressed = await compressImage(files[0], 1000, 0.6);
         formData.append("image", compressed);
         setProgress("AIが時間割を解析中...");
         const res = await fetch("/api/timetable", { method: "POST", body: formData });
