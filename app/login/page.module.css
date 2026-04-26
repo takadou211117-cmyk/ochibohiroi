@@ -81,7 +81,7 @@
 .form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .field {
@@ -90,12 +90,34 @@
   gap: 6px;
 }
 
+.rememberRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.rememberRow input {
+  width: 16px;
+  height: 16px;
+  accent-color: #8b5cf6;
+}
+
 .submitBtn {
   width: 100%;
   justify-content: center;
   padding: 14px;
   font-size: 15px;
   margin-top: 4px;
+}
+
+.biometricBtn {
+  width: 100%;
+  justify-content: center;
+  padding: 12px;
+  font-size: 14px;
 }
 
 .smallSpinner {

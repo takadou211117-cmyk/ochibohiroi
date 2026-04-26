@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -9,17 +9,63 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [supportsBiometric, setSupportsBiometric] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    const storedEmail = localStorage.getItem("savedEmail");
+    const storedRemember = localStorage.getItem("rememberPassword") === "true";
+    setRememberMe(storedRemember);
+    if (storedEmail) setEmail(storedEmail);
+
+    const biometricAvailable = typeof window !== "undefined" &&
+      !!(navigator.credentials && (navigator.credentials as any).get);
+    setSupportsBiometric(biometricAvailable);
+
+    if (storedRemember && biometricAvailable) {
+      restoreSavedCredential();
+    }
+  }, []);
+
+  const restoreSavedCredential = async () => {
+    if (!navigator.credentials?.get) return;
+    try {
+      const credential = await (navigator.credentials as any).get({
+        password: true,
+        mediation: "optional",
+      });
+      if (credential?.password) {
+        setEmail(credential.id || "");
+        setPassword(credential.password);
+      }
+    } catch {
+      // ignore silent restore failures
+    }
+  };
+
+  const saveCredentials = async (emailValue: string, passwordValue: string) => {
+    try {
+      if (navigator.credentials?.store) {
+        const passwordCredential = new (window as any).PasswordCredential({
+          id: emailValue,
+          password: passwordValue,
+        });
+        await navigator.credentials.store(passwordCredential);
+      }
+    } catch {
+      // Browser may not support storing credentials; ignore
+    }
+  };
+
+  const login = async (emailValue: string, passwordValue: string) => {
     setLoading(true);
     setError("");
 
     const result = await signIn("credentials", {
-      email,
-      password,
+      email: emailValue,
+      password: passwordValue,
       redirect: false,
     });
 
@@ -27,9 +73,49 @@ export default function LoginPage() {
 
     if (result?.error) {
       setError("メールアドレスまたはパスワードが間違っています");
+      return false;
+    }
+
+    if (rememberMe) {
+      localStorage.setItem("savedEmail", emailValue);
+      localStorage.setItem("rememberPassword", "true");
+      await saveCredentials(emailValue, passwordValue);
     } else {
-      router.push("/");
-      router.refresh();
+      localStorage.removeItem("savedEmail");
+      localStorage.setItem("rememberPassword", "false");
+    }
+
+    router.push("/");
+    router.refresh();
+    return true;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await login(email, password);
+  };
+
+  const handleFaceIdLogin = async () => {
+    if (!navigator.credentials?.get) {
+      setError("お使いのブラウザはFace IDログインに対応していません");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const credential = await (navigator.credentials as any).get({
+        password: true,
+        mediation: "required",
+      });
+      if (!credential?.password) {
+        throw new Error("no credential");
+      }
+      await login(credential.id, credential.password);
+    } catch {
+      setError("Face IDでのログインに失敗しました。もう一度お試しください。");
+      setLoading(false);
     }
   };
 
@@ -55,6 +141,8 @@ export default function LoginPage() {
             <label className="label">メールアドレス</label>
             <input
               type="email"
+              name="email"
+              autoComplete="email"
               className="input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -67,6 +155,8 @@ export default function LoginPage() {
             <label className="label">パスワード</label>
             <input
               type="password"
+              name="current-password"
+              autoComplete="current-password"
               className="input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -74,6 +164,15 @@ export default function LoginPage() {
               required
             />
           </div>
+          <label className={styles.rememberRow}>
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+            />
+            次回からパスワードを保存する
+          </label>
+
           <button
             type="submit"
             className={`btn btn-primary ${styles.submitBtn}`}
@@ -88,6 +187,16 @@ export default function LoginPage() {
               "ログイン"
             )}
           </button>
+          {supportsBiometric && (
+            <button
+              type="button"
+              className={`btn btn-secondary ${styles.biometricBtn}`}
+              onClick={handleFaceIdLogin}
+              disabled={loading}
+            >
+              {loading ? "認証中..." : "Face IDでログイン"}
+            </button>
+          )}
         </form>
 
         <p className={styles.switchLink}>
