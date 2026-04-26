@@ -19,6 +19,8 @@ export default function SessionView({ session, onBack, onEditNote, onRefresh, ad
   const [editingMemo, setEditingMemo] = useState<string | null>(null);
   const [memoText, setMemoText] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
   const handleDeletePhoto = async (id: string) => {
     if (!confirm("この写真を削除しますか？")) return;
@@ -28,6 +30,7 @@ export default function SessionView({ session, onBack, onEditNote, onRefresh, ad
       if (res.ok) {
         addToast("写真を削除しました");
         if (selectedPhoto?.id === id) setSelectedPhoto(null);
+        setSelectedPhotoIds((prev) => prev.filter((item) => item !== id));
         onRefresh();
       }
     } catch (e) {
@@ -51,6 +54,83 @@ export default function SessionView({ session, onBack, onEditNote, onRefresh, ad
       }
     } catch (e) {
       addToast("メモの保存に失敗しました", "error");
+    }
+  };
+
+  const handleTogglePhotoFavorite = async (photo: any) => {
+    try {
+      setBulkActionLoading(true);
+      const res = await fetch(`/api/photos?id=${photo.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isFavorite: !photo.isFavorite }),
+      });
+      if (res.ok) {
+        addToast(photo.isFavorite ? "お気に入りを解除しました" : "お気に入り登録しました");
+        onRefresh();
+      }
+    } catch (e) {
+      addToast("お気に入り操作に失敗しました", "error");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const togglePhotoSelection = (id: string) => {
+    setSelectedPhotoIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedPhotoIds.length === session.photos.length) {
+      setSelectedPhotoIds([]);
+    } else {
+      setSelectedPhotoIds(session.photos.map((photo: any) => photo.id));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!selectedPhotoIds.length) return;
+    if (!confirm(`${selectedPhotoIds.length}件をまとめて削除しますか？`)) return;
+    setBulkActionLoading(true);
+    try {
+      const res = await fetch(`/api/photos?ids=${selectedPhotoIds.join(",")}`, { method: "DELETE" });
+      if (res.ok) {
+        addToast("選択した写真を削除しました");
+        setSelectedPhotoIds([]);
+        if (selectedPhoto && selectedPhotoIds.includes(selectedPhoto.id)) {
+          setSelectedPhoto(null);
+        }
+        onRefresh();
+      }
+    } catch (e) {
+      addToast("複数削除に失敗しました", "error");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkFavorite = async (favorite: boolean) => {
+    if (!selectedPhotoIds.length) return;
+    setBulkActionLoading(true);
+    try {
+      await Promise.all(
+        selectedPhotoIds.map((id) =>
+          fetch(`/api/photos?id=${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ isFavorite: favorite }),
+          })
+        )
+      );
+      addToast(favorite ? "選択した写真をお気に入り登録しました" : "選択した写真のお気に入りを解除しました");
+      setSelectedPhotoIds([]);
+      onRefresh();
+    } catch (e) {
+      addToast("お気に入り変更に失敗しました", "error");
+    } finally {
+      setBulkActionLoading(false);
     }
   };
 
@@ -90,22 +170,64 @@ export default function SessionView({ session, onBack, onEditNote, onRefresh, ad
         {/* Photos Grid */}
         <div className={styles.photosSection}>
           <h3 className={styles.sectionTitle}>📸 板書写真 ({session.photos.length}枚)</h3>
+          {selectedPhotoIds.length > 0 && (
+            <div className={styles.bulkActions}>
+              <div>{selectedPhotoIds.length}枚選択中</div>
+              <div className={styles.bulkButtons}>
+                <button className="btn btn-secondary btn-sm" onClick={handleSelectAll} disabled={bulkActionLoading}>
+                  {selectedPhotoIds.length === session.photos.length ? "全解除" : "すべて選択"}
+                </button>
+                <button className="btn btn-secondary btn-sm" onClick={() => handleBulkFavorite(true)} disabled={bulkActionLoading}>
+                  ⭐ お気に入り登録
+                </button>
+                <button className="btn btn-secondary btn-sm" onClick={() => handleBulkFavorite(false)} disabled={bulkActionLoading}>
+                  ☆ お気に入り解除
+                </button>
+                <button className="btn btn-danger btn-sm" onClick={handleBulkDelete} disabled={bulkActionLoading}>
+                  🗑️ 選択削除
+                </button>
+              </div>
+            </div>
+          )}
           {session.photos.length === 0 ? (
             <div className={styles.emptyCard}>写真がありません</div>
           ) : (
             <div className={styles.photoGrid}>
               {session.photos.map((p: any) => (
-                <div key={p.id} className={styles.photoCard} onClick={() => setSelectedPhoto(p)}>
-                  <img src={p.url} alt="板書" className={styles.photoImg} />
-                  {p.memo && <div className={styles.photoMemoPreview}>{p.memo}</div>}
+                <div
+                key={p.id}
+                className={`${styles.photoCard} ${selectedPhotoIds.includes(p.id) ? styles.selectedPhotoCard : ""}`}
+                onClick={() => setSelectedPhoto(p)}
+              >
+                <img src={p.url} alt="板書" className={styles.photoImg} />
+                <div className={styles.photoOverlay} onClick={(e) => e.stopPropagation()}>
+                  <label className={styles.photoCheckbox} onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedPhotoIds.includes(p.id)}
+                      onChange={() => togglePhotoSelection(p.id)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <span />
+                  </label>
                   <button
-                    className={styles.deletePhotoBtn}
-                    onClick={(e) => { e.stopPropagation(); handleDeletePhoto(p.id); }}
-                    disabled={deletingId === p.id}
+                    className={`${styles.favoriteBtn} ${p.isFavorite ? styles.favoriteActive : ""}`}
+                    onClick={(e) => { e.stopPropagation(); handleTogglePhotoFavorite(p); }}
+                    disabled={bulkActionLoading}
+                    title={p.isFavorite ? "お気に入り解除" : "お気に入り登録"}
                   >
-                    ×
+                    {p.isFavorite ? "★" : "☆"}
                   </button>
                 </div>
+                {p.memo && <div className={styles.photoMemoPreview}>{p.memo}</div>}
+                <button
+                  className={styles.deletePhotoBtn}
+                  onClick={(e) => { e.stopPropagation(); handleDeletePhoto(p.id); }}
+                  disabled={deletingId === p.id}
+                >
+                  ×
+                </button>
+              </div>
               ))}
             </div>
           )}
