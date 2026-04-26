@@ -89,35 +89,39 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 科目ごとに並列でDBに保存（超高速化）
+    const subjectNames = Array.from(subjectsMap.keys());
+
+    // 事前に既存科目とスケジュールをバッチで取得してDBクエリを削減
+    const existingSubjects = await prisma.subject.findMany({
+      where: { userId: user!.id, name: { in: subjectNames } },
+      include: { schedules: true },
+    });
+    const existingSubjectsByName = new Map(existingSubjects.map((sub) => [sub.name, sub]));
+
     const createdSubjects = await Promise.all(
       Array.from(subjectsMap.values()).map(async (s) => {
-        const existing = await prisma.subject.findFirst({
-          where: { userId: user!.id, name: s.name },
-        });
+        const existing = existingSubjectsByName.get(s.name);
 
         if (existing) {
           console.log(`[Timetable] Subject already exists: ${s.name}, checking schedules`);
-          // 既存科目の場合、スケジュールを並列で追加
+          const scheduleByKey = new Set(existing.schedules.map((sch) => `${sch.dayOfWeek}:${sch.period}`));
+
           await Promise.all(s.schedules.map(async (sch: any) => {
-            const existingSch = await prisma.schedule.findFirst({
-              where: { subjectId: existing.id, dayOfWeek: sch.dayOfWeek, period: sch.period },
+            const key = `${sch.dayOfWeek}:${sch.period}`;
+            if (scheduleByKey.has(key)) return;
+            scheduleByKey.add(key);
+            await prisma.schedule.create({
+              data: {
+                subjectId: existing.id,
+                dayOfWeek: sch.dayOfWeek,
+                period: sch.period,
+                startTime: sch.startTime,
+                endTime: sch.endTime,
+              },
             });
-            if (!existingSch) {
-              await prisma.schedule.create({
-                data: {
-                  subjectId: existing.id,
-                  dayOfWeek: sch.dayOfWeek,
-                  period: sch.period,
-                  startTime: sch.startTime,
-                  endTime: sch.endTime,
-                }
-              });
-            }
           }));
           return existing;
         } else {
-          // 新規科目の場合、すべてのスケジュールを一度に作成（ネスト作成で1クエリに！）
           console.log(`[Timetable] Creating new subject: ${s.name} with ${s.schedules.length} schedules`);
           const subject = await prisma.subject.create({
             data: {
