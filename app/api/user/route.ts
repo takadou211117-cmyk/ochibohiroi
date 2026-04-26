@@ -21,14 +21,13 @@ export async function GET() {
         createdAt: true,
         subjects: {
           orderBy: { createdAt: "asc" },
-          include: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+            professor: true,
+            room: true,
             schedules: true,
-            notes: { orderBy: { createdAt: "desc" }, take: 3 },
-            sessions: {
-              orderBy: { date: "desc" },
-              take: 1,
-              include: { photos: { take: 1 } },
-            },
             _count: { select: { sessions: true, notes: true } },
           },
         },

@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const files = formData.getAll("photos") as File[];
     const subjectIdParam = formData.get("subjectId") as string | null;
+    const subjectNameParam = formData.get("subjectName") as string | null;
     const dateParam = formData.get("date") as string | null;
 
     if (!files.length) {
@@ -60,8 +61,25 @@ export async function POST(req: NextRequest) {
 
     const firstFileDate = files[0].lastModified ? new Date(files[0].lastModified) : new Date();
 
-    // 科目の自動判定（最初の1枚だけ使用）
+    // 直接指定された科目名があれば、それを使う
     let targetSubjectId = subjectIdParam;
+    if (!targetSubjectId && subjectNameParam) {
+      const existingSubject = allSubjects.find((s) => s.name === subjectNameParam.trim());
+      if (existingSubject) {
+        targetSubjectId = existingSubject.id;
+      } else {
+        const newSubject = await prisma.subject.create({
+          data: {
+            userId: user!.id,
+            name: subjectNameParam.trim(),
+            color: "#6d28d9",
+          },
+        });
+        targetSubjectId = newSubject.id;
+      }
+    }
+
+    // AI判定なしで直接指定された科目があれば、そのまま使う
     if (!targetSubjectId) {
       targetSubjectId = detectSubjectFromTimestamp(firstFileDate, allSchedules);
     }
