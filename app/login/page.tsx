@@ -13,6 +13,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [supportsBiometric, setSupportsBiometric] = useState(false);
+  const [supportsBiometric, setSupportsBiometric] = useState(false);
+  const [supportsCredentialManager, setSupportsCredentialManager] = useState(false);
 
   useEffect(() => {
     const storedEmail = localStorage.getItem("savedEmail");
@@ -23,6 +25,12 @@ export default function LoginPage() {
     const biometricAvailable = typeof window !== "undefined" &&
       !!(navigator.credentials && (navigator.credentials as any).get);
     setSupportsBiometric(biometricAvailable);
+
+    const credentialManagerAvailable = typeof window !== "undefined" &&
+      !!navigator.credentials &&
+      typeof (window as any).PasswordCredential === "function" &&
+      typeof (navigator.credentials as any).store === "function";
+    setSupportsCredentialManager(credentialManagerAvailable);
 
     if (storedRemember && biometricAvailable) {
       restoreSavedCredential();
@@ -51,11 +59,35 @@ export default function LoginPage() {
         const passwordCredential = new (window as any).PasswordCredential({
           id: emailValue,
           password: passwordValue,
+          name: emailValue,
         });
         await navigator.credentials.store(passwordCredential);
       }
     } catch {
       // Browser may not support storing credentials; ignore
+    }
+  };
+
+  const registerBiometric = async () => {
+    if (!supportsCredentialManager) {
+      addToast("この端末はFace ID登録に対応していません", "error");
+      return;
+    }
+    if (!email || !password) {
+      addToast("Face ID登録にはメールアドレスとパスワードの入力が必要です", "error");
+      return;
+    }
+
+    try {
+      const passwordCredential = new (window as any).PasswordCredential({
+        id: email,
+        password,
+        name: email,
+      });
+      await navigator.credentials.store(passwordCredential);
+      addToast("Face IDに対応したパスワード管理を登録しました。次回からFace IDでログインできます。", "success");
+    } catch (err: any) {
+      addToast(`Face ID登録に失敗しました: ${err?.message || "対応ブラウザをお試しください"}`, "error");
     }
   };
 
@@ -86,7 +118,6 @@ export default function LoginPage() {
     }
 
     router.push("/");
-    router.refresh();
     return true;
   };
 
@@ -195,6 +226,16 @@ export default function LoginPage() {
               disabled={loading}
             >
               {loading ? "認証中..." : "Face IDでログイン"}
+            </button>
+          )}
+          {supportsCredentialManager && (
+            <button
+              type="button"
+              className={`btn btn-secondary ${styles.biometricBtn}`}
+              onClick={registerBiometric}
+              disabled={loading || !email || !password}
+            >
+              {loading ? "処理中..." : "Face ID登録"}
             </button>
           )}
         </form>
