@@ -102,7 +102,7 @@ $$E = mc^2$$（例）
       console.log(`[Notes] Starting note generation for session ${sessionId}`);
       console.log(`[Notes] Processing ${session.photos.length} photos`);
 
-      const MAX_IMAGES = 6;
+      const MAX_IMAGES = 12;
       const selectedPhotos = session.photos.slice(0, MAX_IMAGES);
       if (session.photos.length > MAX_IMAGES) {
         console.log(`[Notes] Limiting note generation to first ${MAX_IMAGES} photos for speed`);

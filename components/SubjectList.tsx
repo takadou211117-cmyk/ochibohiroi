@@ -212,13 +212,18 @@ export default function SubjectList({ subjects, selectedSubject, onSelectSubject
                 {session.note ? (
                   <span className={styles.noteExistsBadge}>📖 ノートあり</span>
                 ) : (
-                  <button
-                    className="btn btn-primary btn-sm"
-                    disabled={generating === session.id || session.photos.length === 0}
-                    onClick={(e) => { e.stopPropagation(); handleGenerateNote(e, session.id); }}
-                  >
-                    {generating === session.id ? "生成中..." : "✨ AIノート生成"}
-                  </button>
+                  <>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      disabled={generating === session.id || session.photos.length === 0}
+                      onClick={(e) => { e.stopPropagation(); handleGenerateNote(e, session.id); }}
+                    >
+                      {generating === session.id ? "生成中..." : "✨ AIノート生成"}
+                    </button>
+                    {session.photos.length > 12 && (
+                      <div className={styles.noteLimitHint}>最大12枚までの写真でノート生成します</div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

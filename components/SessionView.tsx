@@ -4,6 +4,8 @@ import styles from "./SessionView.module.css";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+const NOTE_IMAGE_LIMIT = 12;
+
 interface Props {
   session: any;
   onBack: () => void;
@@ -127,6 +129,11 @@ export default function SessionView({ session, onBack, onEditNote, onRefresh, ad
               </button>
             )}
           </div>
+          {!session.note && session.photos.length > NOTE_IMAGE_LIMIT && (
+            <div className={styles.limitNotice}>
+              このセッションには{session.photos.length}枚の写真があります。ノート生成には最大{NOTE_IMAGE_LIMIT}枚を使用します。
+            </div>
+          )}
 
           {session.note ? (
             <div className={`glass ${styles.noteCard} markdown-body`}>
