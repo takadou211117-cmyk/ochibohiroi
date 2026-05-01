@@ -48,7 +48,7 @@
 
 .card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 10px 40px rgba(var(--subject-color-rgb, 139, 92, 246), 0.15);
+  box-shadow: 0 10px 40px rgba(139, 92, 246, 0.2);
   border-color: var(--accent-3);
 }
 
