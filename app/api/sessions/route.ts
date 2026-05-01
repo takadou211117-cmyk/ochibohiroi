@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
             const subjectNames = allSubjects.map((s) => s.name).join("、");
             // analyzeImageWithGemini（JSON modeあり）を使用して高速化
             const aiPrompt = `板書写真から科目を特定してください。候補:「${subjectNames}」\n{"subjectName":"科目名または null"}`;
-            const aiResult = await analyzeImageWithGemini(base64, files[0].type, aiPrompt);
+            const aiResult = await analyzeImageWithGemini(base64, files[0].type, aiPrompt, true);
             const parsed = JSON.parse(aiResult.trim());
             if (parsed.subjectName) {
               const matchedSubject = allSubjects.find((s) => s.name === parsed.subjectName);

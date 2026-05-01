@@ -2,7 +2,7 @@
 import { useState, useRef } from "react";
 import styles from "./UploadModal.module.css";
 
-const compressImage = async (file: File, maxWidth = 900, quality = 0.55): Promise<File> => {
+const compressImage = async (file: File, maxWidth = 720, quality = 0.45): Promise<File> => {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
