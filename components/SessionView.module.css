@@ -76,9 +76,10 @@
 }
 
 .photoCard:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-sm);
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 12px 30px rgba(139, 92, 246, 0.25);
   border-color: var(--accent-1);
+  z-index: 10;
 }
 
 .photoImg {
