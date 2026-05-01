@@ -77,12 +77,12 @@ export default function SubjectList({ subjects, selectedSubject, onSelectSubject
     setGenerating(sessionId);
     setGenProgress((p) => ({ ...p, [sessionId]: 0 }));
 
-    const ESTIMATED_MS = 20000;
-    const INTERVAL_MS = 300;
-    const maxFake = 92;
+    const ESTIMATED_MS = 5000; // 20秒から5秒に短縮
+    const INTERVAL_MS = 100;
+    const maxFake = 95;
     let current = 0;
     const timer = setInterval(() => {
-      current += (maxFake - current) * (INTERVAL_MS / ESTIMATED_MS) * 2.5;
+      current += (maxFake - current) * (INTERVAL_MS / ESTIMATED_MS) * 3;
       setGenProgress((p) => ({ ...p, [sessionId]: Math.min(current, maxFake) }));
     }, INTERVAL_MS);
 

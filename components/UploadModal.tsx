@@ -190,7 +190,7 @@ export default function UploadModal({ type, subjects, onClose, onSuccess, addToa
         setUploadProgress(25);
 
         // フェーズ2: AI解析 (25→95%)
-        startPhaseProgress("🧠 AIが時間割を解析中...", 25, 95, 12000);
+        startPhaseProgress("🧠 AIが時間割を解析中...", 25, 95, 4000);
         formData.append("image", compressed);
         const res = await fetch("/api/timetable", { method: "POST", body: formData });
         const data = await res.json();
@@ -227,7 +227,7 @@ export default function UploadModal({ type, subjects, onClose, onSuccess, addToa
         const phase2Label = hasAiDetection
           ? `📡 ${totalFiles}枚をアップロード中（AI科目判定あり）...`
           : `📡 ${totalFiles}枚をアップロード中...`;
-        startPhaseProgress(phase2Label, 40, 95, hasAiDetection ? 10000 : 5000);
+        startPhaseProgress(phase2Label, 40, 95, hasAiDetection ? 4000 : 2000);
 
         const res = await fetch("/api/sessions", { method: "POST", body: formData });
         const data = await res.json();

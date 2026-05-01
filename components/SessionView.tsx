@@ -165,13 +165,13 @@ export default function SessionView({ session, onBack, onEditNote, onRefresh, ad
     setGeneratingNote(true);
     setNoteProgress(0);
 
-    // 推定進捗アニメーション（返り値は実際の進捗に非連動）
-    const ESTIMATED_MS = 20000; // 約2秒が目安
-    const INTERVAL_MS = 300;
-    const maxFake = 92; // 100%はAI完了時のみ
+    // 推定進捗アニメーション（約5秒目安）
+    const ESTIMATED_MS = 5000; 
+    const INTERVAL_MS = 100;
+    const maxFake = 95; // 100%はAI完了時のみ
     let current = 0;
     const timer = setInterval(() => {
-      current += (maxFake - current) * (INTERVAL_MS / ESTIMATED_MS) * 2.5;
+      current += (maxFake - current) * (INTERVAL_MS / ESTIMATED_MS) * 3;
       setNoteProgress(Math.min(current, maxFake));
     }, INTERVAL_MS);
 
