@@ -13,17 +13,46 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const subjectId = searchParams.get("subjectId");
+  const sessionId = searchParams.get("sessionId"); // 個別セッション詳細取得
 
   try {
+    // 個別セッション詳細（写真URL含む完全データ）
+    if (sessionId) {
+      const session = await prisma.lectureSession.findFirst({
+        where: {
+          id: sessionId,
+          subject: { userId: user!.id },
+        },
+        include: {
+          photos: { orderBy: { sortOrder: "asc" } },
+          note: true,
+          subject: { select: { id: true, name: true, color: true } },
+        },
+      });
+      if (!session) return NextResponse.json({ error: "見つかりません" }, { status: 404 });
+      return NextResponse.json(session);
+    }
+
+    // セッション一覧（軽量: 写真URLを除外、カウントと先頭サムネイルのみ）
     const sessions = await prisma.lectureSession.findMany({
       where: {
         subjectId: subjectId || undefined,
         subject: { userId: user!.id },
       },
-      include: {
-        photos: { orderBy: { sortOrder: "asc" } },
-        note: true,
+      select: {
+        id: true,
+        date: true,
+        sessionNum: true,
+        subjectId: true,
         subject: { select: { id: true, name: true, color: true } },
+        note: { select: { id: true, title: true } },
+        _count: { select: { photos: true } },
+        // 先頭4枚のサムネイルURLのみ取得（一覧表示用）
+        photos: {
+          orderBy: { sortOrder: "asc" },
+          take: 4,
+          select: { id: true, url: true },
+        },
       },
       orderBy: { date: "desc" },
     });

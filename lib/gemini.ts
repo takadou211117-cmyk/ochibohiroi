@@ -54,6 +54,7 @@ export async function analyzeImageWithGemini(
         ],
         config: {
           responseMimeType: "application/json",
+          thinkingConfig: { thinkingBudget: 0 },
         },
       });
 
@@ -97,6 +98,9 @@ export async function analyzeMultipleImagesWithGemini(
       const response = await ai.models.generateContent({
         model,
         contents: [{ role: "user", parts }],
+        config: {
+          thinkingConfig: { thinkingBudget: 0 },
+        },
       });
 
       const rawText = response.text || "";

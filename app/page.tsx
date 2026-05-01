@@ -102,7 +102,7 @@ export default function Dashboard() {
             session={selectedSession}
             onBack={() => setSelectedSession(null)}
             onEditNote={setEditingNote}
-            onRefresh={fetchUser}
+            onRefresh={() => {/* セッション詳細は内部でデータ更新するため不要 */}}
             addToast={addToast}
           />
         ) : activeView === "timetable" ? (

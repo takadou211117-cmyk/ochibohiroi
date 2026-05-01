@@ -90,6 +90,11 @@ export default function SubjectList({ subjects, selectedSubject, onSelectSubject
     }
   };
 
+  // セッションのphoto枚数を取得（APIの_countまたはphotos配列長から）
+  const getPhotoCount = (session: any): number => {
+    return session._count?.photos ?? session.photos?.length ?? 0;
+  };
+
   const DAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 
   if (!selectedSubject) {
@@ -201,11 +206,11 @@ export default function SubjectList({ subjects, selectedSubject, onSelectSubject
                   {new Date(session.date).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" })}
                 </div>
                 <div className={styles.sessionNum}>第{session.sessionNum}回</div>
-                <div className={styles.sessionPhotos}>📷 {session.photos.length}枚</div>
+                <div className={styles.sessionPhotos}>📷 {getPhotoCount(session)}枚</div>
               </div>
               <div className={styles.sessionMiddle}>
                 {session.photos.slice(0, 4).map((p: any) => (
-                  <img key={p.id} src={p.url} alt="" className={styles.thumbnail} />
+                  <img key={p.id} src={p.url} alt="" className={styles.thumbnail} loading="lazy" decoding="async" />
                 ))}
               </div>
               <div className={styles.sessionRight}>
@@ -215,12 +220,12 @@ export default function SubjectList({ subjects, selectedSubject, onSelectSubject
                   <>
                     <button
                       className="btn btn-primary btn-sm"
-                      disabled={generating === session.id || session.photos.length === 0}
+                      disabled={generating === session.id || getPhotoCount(session) === 0}
                       onClick={(e) => { e.stopPropagation(); handleGenerateNote(e, session.id); }}
                     >
                       {generating === session.id ? "生成中..." : "✨ AIノート生成"}
                     </button>
-                    {session.photos.length > 12 && (
+                    {getPhotoCount(session) > 12 && (
                       <div className={styles.noteLimitHint}>最大12枚までの写真でノート生成します</div>
                     )}
                   </>

@@ -108,32 +108,40 @@ $$E = mc^2$$（例）
         console.log(`[Notes] Limiting note generation to first ${MAX_IMAGES} photos for speed`);
       }
 
+      // 全画像を並列fetchして高速化（逐次 → Promise.all）
+      console.log(`[Notes] Fetching ${selectedPhotos.length} photos in parallel...`);
+      const fetchStart = Date.now();
       const images = await Promise.all(
         selectedPhotos.map(async (photo) => {
           try {
             if (photo.url.startsWith("data:")) {
               const [header, data] = photo.url.split(",");
               const mimeType = header.match(/data:([^;]+)/)?.[1] || "image/jpeg";
-              console.log(`[Notes] Loaded inline photo (${mimeType})`);
               return { base64: data, mimeType };
             }
 
-            console.log(`[Notes] Fetching photo from URL: ${photo.url.substring(0, 80)}...`);
-            const res = await fetch(photo.url);
-            if (!res.ok) {
-              console.error(`[Notes] Failed to fetch photo: ${res.status} ${res.statusText}`);
-              return null;
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 15000);
+            try {
+              const res = await fetch(photo.url, { signal: controller.signal });
+              clearTimeout(timeout);
+              if (!res.ok) {
+                console.error(`[Notes] Failed to fetch photo: ${res.status}`);
+                return null;
+              }
+              const buf = Buffer.from(await res.arrayBuffer());
+              const mimeType = res.headers.get("content-type") || "image/jpeg";
+              return { base64: buf.toString("base64"), mimeType };
+            } finally {
+              clearTimeout(timeout);
             }
-            const buf = Buffer.from(await res.arrayBuffer());
-            const mimeType = res.headers.get("content-type") || "image/jpeg";
-            console.log(`[Notes] Fetched photo (${mimeType}, ${buf.byteLength} bytes)`);
-            return { base64: buf.toString("base64"), mimeType };
           } catch (photoErr: any) {
             console.error(`[Notes] Error processing photo ${photo.id}:`, photoErr.message);
             return null;
           }
         })
       );
+      console.log(`[Notes] Parallel fetch done in ${Date.now() - fetchStart}ms`);
 
       const validImages = images.filter((img): img is { base64: string; mimeType: string } => !!img);
       if (!validImages.length) {

@@ -13,7 +13,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [supportsBiometric, setSupportsBiometric] = useState(false);
-  const [supportsBiometric, setSupportsBiometric] = useState(false);
   const [supportsCredentialManager, setSupportsCredentialManager] = useState(false);
 
   useEffect(() => {

@@ -77,13 +77,15 @@ const pdfToImages = async (file: File): Promise<File[]> => {
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const pageCount = pdf.numPages;
   const pagesToConvert = Math.min(pageCount, 20);
-  const imageFiles: File[] = [];
 
-  for (let pageNumber = 1; pageNumber <= pagesToConvert; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const imageFile = await pdfPageToFile(page, pageNumber, file.name.replace(/\.[^.]+$/, ""));
-    imageFiles.push(imageFile);
-  }
+  // 並列変換（逐次 for ループ → Promise.all で高速化）
+  const pageNumbers = Array.from({ length: pagesToConvert }, (_, i) => i + 1);
+  const imageFiles = await Promise.all(
+    pageNumbers.map(async (pageNumber) => {
+      const page = await pdf.getPage(pageNumber);
+      return pdfPageToFile(page, pageNumber, file.name.replace(/\.[^.]+$/, ""));
+    })
+  );
 
   return imageFiles;
 };

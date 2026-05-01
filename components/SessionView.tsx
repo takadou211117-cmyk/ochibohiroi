@@ -1,8 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import styles from "./SessionView.module.css";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+
 
 const NOTE_IMAGE_LIMIT = 12;
 
@@ -21,6 +22,26 @@ export default function SessionView({ session, onBack, onEditNote, onRefresh, ad
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  // photos はオンデマンド取得（一覧では軽量データのみ）
+  const [fullSession, setFullSession] = useState<any>(session);
+  const [loadingFull, setLoadingFull] = useState(
+    // 写真URLが含まれているかチェック。なければ取得が必要
+    !session.photos?.[0]?.url && session._count?.photos > 0
+  );
+
+  // コンポーネントマウント時に完全データをフェッチ（まだ取得していない場合）
+  useEffect(() => {
+    if (loadingFull) {
+      fetch(`/api/sessions?sessionId=${session.id}`)
+        .then((r) => r.json())
+        .then((data) => { setFullSession(data); setLoadingFull(false); })
+        .catch(() => { setFullSession(session); setLoadingFull(false); });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // フルデータまたは一覧データを使用
+  const s = fullSession;
 
   const handleDeletePhoto = async (id: string) => {
     if (!confirm("この写真を削除しますか？")) return;
@@ -31,6 +52,9 @@ export default function SessionView({ session, onBack, onEditNote, onRefresh, ad
         addToast("写真を削除しました");
         if (selectedPhoto?.id === id) setSelectedPhoto(null);
         setSelectedPhotoIds((prev) => prev.filter((item) => item !== id));
+        // 削除後に完全データを再取得
+        const refreshed = await fetch(`/api/sessions?sessionId=${session.id}`);
+        if (refreshed.ok) setFullSession(await refreshed.json());
         onRefresh();
       }
     } catch (e) {
@@ -140,28 +164,55 @@ export default function SessionView({ session, onBack, onEditNote, onRefresh, ad
       const res = await fetch("/api/notes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: session.id }),
+        body: JSON.stringify({ sessionId: s.id }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       addToast("ノートを生成しました！", "success");
+      // ノート生成後に完全データを再取得
+      const refreshed = await fetch(`/api/sessions?sessionId=${session.id}`);
+      if (refreshed.ok) setFullSession(await refreshed.json());
       onRefresh();
     } catch (err: any) {
       addToast(err.message || "ノート生成に失敗しました", "error");
     }
   };
 
+  // ローディング中は最小限のUIを表示
+  if (loadingFull) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.header}>
+          <button className="btn btn-secondary btn-sm" onClick={onBack}>← 科目に戻る</button>
+          <div className={styles.headerContent}>
+            <div className="badge">{session.sessionNum}</div>
+            <div>
+              <h2 className={styles.title}>
+                {new Date(session.date).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" })}
+              </h2>
+              <p className={styles.subtitle}>{session.subject?.name} - 第{session.sessionNum}回</p>
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 300, gap: 12 }}>
+          <div className="spinner" />
+          <p style={{ color: "var(--text-secondary)" }}>写真を読み込んでいます...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.container}>
       <div className={styles.header}>
         <button className="btn btn-secondary btn-sm" onClick={onBack}>← 科目に戻る</button>
         <div className={styles.headerContent}>
-          <div className="badge">{session.sessionNum}</div>
+          <div className="badge">{s.sessionNum}</div>
           <div>
             <h2 className={styles.title}>
-              {new Date(session.date).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" })}
+              {new Date(s.date).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" })}
             </h2>
-            <p className={styles.subtitle}>{session.subject.name} - 第{session.sessionNum}回</p>
+            <p className={styles.subtitle}>{s.subject.name} - 第{s.sessionNum}回</p>
           </div>
         </div>
       </div>
@@ -169,13 +220,13 @@ export default function SessionView({ session, onBack, onEditNote, onRefresh, ad
       <div className={styles.content}>
         {/* Photos Grid */}
         <div className={styles.photosSection}>
-          <h3 className={styles.sectionTitle}>📸 板書写真 ({session.photos.length}枚)</h3>
+          <h3 className={styles.sectionTitle}>📸 板書写真 ({s.photos.length}枚)</h3>
           {selectedPhotoIds.length > 0 && (
             <div className={styles.bulkActions}>
               <div>{selectedPhotoIds.length}枚選択中</div>
               <div className={styles.bulkButtons}>
                 <button className="btn btn-secondary btn-sm" onClick={handleSelectAll} disabled={bulkActionLoading}>
-                  {selectedPhotoIds.length === session.photos.length ? "全解除" : "すべて選択"}
+                  {selectedPhotoIds.length === s.photos.length ? "全解除" : "すべて選択"}
                 </button>
                 <button className="btn btn-secondary btn-sm" onClick={() => handleBulkFavorite(true)} disabled={bulkActionLoading}>
                   ⭐ お気に入り登録
@@ -189,17 +240,17 @@ export default function SessionView({ session, onBack, onEditNote, onRefresh, ad
               </div>
             </div>
           )}
-          {session.photos.length === 0 ? (
+          {s.photos.length === 0 ? (
             <div className={styles.emptyCard}>写真がありません</div>
           ) : (
             <div className={styles.photoGrid}>
-              {session.photos.map((p: any) => (
+              {s.photos.map((p: any) => (
                 <div
                 key={p.id}
                 className={`${styles.photoCard} ${selectedPhotoIds.includes(p.id) ? styles.selectedPhotoCard : ""}`}
                 onClick={() => setSelectedPhoto(p)}
               >
-                <img src={p.url} alt="板書" className={styles.photoImg} />
+                <img src={p.url} alt="板書" className={styles.photoImg} loading="lazy" decoding="async" />
                 <div className={styles.photoOverlay} onClick={(e) => e.stopPropagation()}>
                   <label className={styles.photoCheckbox} onClick={(e) => e.stopPropagation()}>
                     <input
@@ -237,33 +288,33 @@ export default function SessionView({ session, onBack, onEditNote, onRefresh, ad
         <div className={styles.noteSection}>
           <div className={styles.noteHeader}>
             <h3 className={styles.sectionTitle}>📖 授業ノート</h3>
-            {session.note ? (
-              <button className="btn btn-secondary btn-sm" onClick={() => onEditNote(session.note)}>
+            {s.note ? (
+              <button className="btn btn-secondary btn-sm" onClick={() => onEditNote(s.note)}>
                 ✏️ 編集する
               </button>
             ) : (
               <button
                 className="btn btn-primary btn-sm"
-                disabled={session.photos.length === 0}
+                disabled={s.photos.length === 0}
                 onClick={handleGenerateNote}
               >
                 ✨ AIノート生成
               </button>
             )}
           </div>
-          {!session.note && session.photos.length > NOTE_IMAGE_LIMIT && (
+          {!s.note && s.photos.length > NOTE_IMAGE_LIMIT && (
             <div className={styles.limitNotice}>
-              このセッションには{session.photos.length}枚の写真があります。ノート生成には最大{NOTE_IMAGE_LIMIT}枚を使用します。
+              このセッションには{s.photos.length}枚の写真があります。ノート生成には最大{NOTE_IMAGE_LIMIT}枚を使用します。
             </div>
           )}
 
-          {session.note ? (
+          {s.note ? (
             <div className={`glass ${styles.noteCard} markdown-body`}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{session.note.content}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{s.note.content}</ReactMarkdown>
             </div>
           ) : (
             <div className={styles.emptyCard}>
-              {session.photos.length > 0
+              {s.photos.length > 0
                 ? "右上の「AIノート生成」ボタンを押すと、写真からノートが自動生成されます。"
                 : "写真をアップロードするとノートを生成できます。"}
             </div>
