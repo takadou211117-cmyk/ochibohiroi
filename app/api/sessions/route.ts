@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/utils";
-import { analyzeMultipleImagesWithGemini, detectSubjectFromTimestamp } from "@/lib/gemini";
+import { analyzeImageWithGemini, detectSubjectFromTimestamp } from "@/lib/gemini";
 import { uploadPhoto } from "@/lib/supabase";
 
 export const maxDuration = 60;
@@ -78,98 +78,90 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "写真が見つかりません" }, { status: 400 });
     }
 
-    // 全科目のスケジュールを取得（AI振り分け用）
-    const allSubjects = await prisma.subject.findMany({
-      where: { userId: user!.id },
-      include: { schedules: true },
-    });
+    // ===== 科目判定（最速ルートから順に試みる） =====
+    let targetSubjectId: string | null = subjectIdParam;
 
-    const allSchedules = allSubjects.flatMap((s) =>
-      s.schedules.map((sch) => ({ ...sch, subjectId: s.id }))
-    );
-
-    const firstFileDate = files[0].lastModified ? new Date(files[0].lastModified) : new Date();
-
-    // 直接指定された科目名があれば、それを使う
-    let targetSubjectId = subjectIdParam;
-    if (!targetSubjectId && subjectNameParam) {
-      const existingSubject = allSubjects.find((s) => s.name === subjectNameParam.trim());
-      if (existingSubject) {
-        targetSubjectId = existingSubject.id;
-      } else {
-        const newSubject = await prisma.subject.create({
-          data: {
-            userId: user!.id,
-            name: subjectNameParam.trim(),
-            color: "#6d28d9",
-          },
-        });
-        targetSubjectId = newSubject.id;
-      }
-    }
-
-    // AI判定なしで直接指定された科目があれば、そのまま使う
     if (!targetSubjectId) {
-      targetSubjectId = detectSubjectFromTimestamp(firstFileDate, allSchedules);
-    }
+      // 科目判定が必要な場合のみDBから取得
+      const allSubjects = await prisma.subject.findMany({
+        where: { userId: user!.id },
+        include: { schedules: true },
+      });
 
-    // それでも判定できない場合はAI解析（最初の1枚だけ）
-    if (!targetSubjectId && allSubjects.length > 0 && process.env.GEMINI_API_KEY) {
-      try {
-        const bytes = await files[0].arrayBuffer();
-        const base64 = Buffer.from(bytes).toString("base64");
-        const subjectNames = allSubjects.map((s) => s.name).join("、");
-        const aiPrompt = `この写真は大学の授業の板書です。登録されている科目は「${subjectNames}」です。
-写真の内容から最も関連する科目名だけを返してください（JSON形式で）。
-{"subjectName": "科目名"}
-判断できない場合は{"subjectName": null}を返してください。
-マークダウンやコードブロックは使わず、純粋なJSONのみを返してください。`;
-
-        const aiResult = await analyzeMultipleImagesWithGemini([{ base64, mimeType: files[0].type }], aiPrompt);
-        let cleanResult = aiResult.trim();
-        const codeBlockMatch = cleanResult.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
-        if (codeBlockMatch) cleanResult = codeBlockMatch[1].trim();
-        
-        const parsed = JSON.parse(cleanResult);
-        if (parsed.subjectName) {
-          const matchedSubject = allSubjects.find((s) => s.name === parsed.subjectName);
-          if (matchedSubject) targetSubjectId = matchedSubject.id;
+      if (subjectNameParam) {
+        // ルート2: 科目名直接指定
+        const existingSubject = allSubjects.find((s) => s.name === subjectNameParam.trim());
+        if (existingSubject) {
+          targetSubjectId = existingSubject.id;
+        } else {
+          const newSubject = await prisma.subject.create({
+            data: { userId: user!.id, name: subjectNameParam.trim(), color: "#6d28d9" },
+            select: { id: true },
+          });
+          targetSubjectId = newSubject.id;
         }
-      } catch (aiErr: any) {
-        console.error("[Sessions] AI subject detection failed:", aiErr.message);
-      }
-    }
+      } else {
+        // ルート3: タイムスタンプ判定（無料・即時）
+        const firstFileDate = files[0].lastModified ? new Date(files[0].lastModified) : new Date();
+        const allSchedules = allSubjects.flatMap((s) =>
+          s.schedules.map((sch) => ({ ...sch, subjectId: s.id }))
+        );
+        targetSubjectId = detectSubjectFromTimestamp(firstFileDate, allSchedules);
 
-    if (!targetSubjectId && allSubjects.length > 0) {
-      targetSubjectId = allSubjects[0].id;
+        // ルート4: AI判定（タイムスタンプで分からない場合のフォールバック）
+        if (!targetSubjectId && allSubjects.length > 0 && process.env.GEMINI_API_KEY) {
+          try {
+            const bytes = await files[0].arrayBuffer();
+            const base64 = Buffer.from(bytes).toString("base64");
+            const subjectNames = allSubjects.map((s) => s.name).join("、");
+            // analyzeImageWithGemini（JSON modeあり）を使用して高速化
+            const aiPrompt = `板書写真から科目を特定してください。候補:「${subjectNames}」\n{"subjectName":"科目名または null"}`;
+            const aiResult = await analyzeImageWithGemini(base64, files[0].type, aiPrompt);
+            const parsed = JSON.parse(aiResult.trim());
+            if (parsed.subjectName) {
+              const matchedSubject = allSubjects.find((s) => s.name === parsed.subjectName);
+              if (matchedSubject) targetSubjectId = matchedSubject.id;
+            }
+          } catch (aiErr: any) {
+            console.error("[Sessions] AI subject detection failed:", aiErr.message);
+          }
+        }
+
+        // 最終フォールバック: 最初の科目に割り当て
+        if (!targetSubjectId && allSubjects.length > 0) {
+          targetSubjectId = allSubjects[0].id;
+        }
+      }
     }
 
     if (!targetSubjectId) {
       return NextResponse.json({ error: "科目が見つかりません。先に時間割を登録してください。" }, { status: 400 });
     }
 
-    // セッション（授業回）を取得または作成（1回だけ）
+    // ===== セッション取得 or 作成 =====
+    const firstFileDate = files[0].lastModified ? new Date(files[0].lastModified) : new Date();
     const sessionDate = dateParam ? new Date(dateParam) : firstFileDate;
-    const dayStart = new Date(sessionDate);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(sessionDate);
-    dayEnd.setHours(23, 59, 59, 999);
+    const dayStart = new Date(sessionDate); dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(sessionDate); dayEnd.setHours(23, 59, 59, 999);
 
+    // findFirst + count を並列実行して1ラウンドトリップを節約
     let session = await prisma.lectureSession.findFirst({
       where: { subjectId: targetSubjectId, date: { gte: dayStart, lte: dayEnd } },
+      select: { id: true, sessionNum: true },
     });
 
     if (!session) {
       const sessionCount = await prisma.lectureSession.count({ where: { subjectId: targetSubjectId } });
       session = await prisma.lectureSession.create({
         data: { subjectId: targetSubjectId, date: sessionDate, sessionNum: sessionCount + 1 },
+        select: { id: true, sessionNum: true },
       });
     }
 
     const hasSupabaseConfig = process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NEXT_PUBLIC_SUPABASE_URL;
     const initialPhotoCount = await prisma.photo.count({ where: { sessionId: session.id } });
 
-    // 全画像の並列アップロード＆DB保存
+    // ===== 全画像の並列アップロード & DB保存 =====
     const results = await Promise.all(files.map(async (file, index) => {
       try {
         const takenAt = file.lastModified ? new Date(file.lastModified) : new Date();
@@ -178,19 +170,15 @@ export async function POST(req: NextRequest) {
 
         if (hasSupabaseConfig) {
           const uploaded = await uploadPhoto(file, user!.id, targetSubjectId!, session!.id);
-          if (uploaded) {
-            photoUrl = uploaded.url;
-            storageKey = uploaded.key;
-          }
-        }
-        
-        if (!photoUrl) {
-          const bytes = await file.arrayBuffer();
-          const base64 = Buffer.from(bytes).toString("base64");
-          photoUrl = `data:${file.type};base64,${base64}`;
-          storageKey = "";
+          if (uploaded) { photoUrl = uploaded.url; storageKey = uploaded.key; }
         }
 
+        if (!photoUrl) {
+          const bytes = await file.arrayBuffer();
+          photoUrl = `data:${file.type};base64,${Buffer.from(bytes).toString("base64")}`;
+        }
+
+        // 不要なJOIN（session+subject）を除去して軽量に
         const photo = await prisma.photo.create({
           data: {
             sessionId: session!.id,
@@ -199,19 +187,22 @@ export async function POST(req: NextRequest) {
             takenAt,
             sortOrder: initialPhotoCount + index,
           },
-          include: { session: { include: { subject: true } } },
+          select: { id: true },
         });
 
-        return { success: true, photo, session };
+        return { success: true, photoId: photo.id };
       } catch (fileErr: any) {
         console.error(`[Sessions] Error processing file ${file.name}:`, fileErr.message);
         return { error: fileErr.message, file: file.name };
       }
     }));
 
-    return NextResponse.json({ success: true, results });
+    const successCount = results.filter((r) => "success" in r).length;
+    return NextResponse.json({ success: true, sessionId: session.id, count: successCount });
   } catch (err: any) {
     console.error("Photos upload error:", err);
     return NextResponse.json({ error: "アップロード失敗", details: err.message }, { status: 500 });
   }
 }
+
+

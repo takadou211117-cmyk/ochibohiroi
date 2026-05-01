@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, dayNameToNumber, randomColor } from "@/lib/utils";
 import { analyzeImageWithGemini, TIMETABLE_PROMPT } from "@/lib/gemini";
 
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   const { user, error } = await getAuthenticatedUser();
   if (error) return error;
@@ -29,12 +31,7 @@ export async function POST(req: NextRequest) {
     } else {
       const bytes = await image.arrayBuffer();
       const base64 = Buffer.from(bytes).toString("base64");
-      
-      console.log("[Timetable] Starting AI analysis...");
-      console.log("[Timetable] Image type:", image.type, "Size:", bytes.byteLength, "bytes");
-      
       const resultText = await analyzeImageWithGemini(base64, image.type, TIMETABLE_PROMPT);
-      console.log("[Timetable] AI result:", resultText.substring(0, 500));
       
       // JSON パース（より堅牢に）
       let parsed: any;
@@ -58,12 +55,9 @@ export async function POST(req: NextRequest) {
       }
 
       parsedSubjects = parsed.subjects || parsed.Subjects || [];
-      
       if (!Array.isArray(parsedSubjects)) {
         throw new Error("AIの応答からsubjects配列を取得できませんでした");
       }
-      
-      console.log(`[Timetable] Parsed ${parsedSubjects.length} subjects`);
     }
 
     // メモリ上で科目名ごとにグループ化（複数コマの同名科目の重複作成を防ぐため）
