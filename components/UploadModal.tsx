@@ -91,14 +91,26 @@ interface UploadModalProps {
   onClose: () => void;
   onSuccess: (data: any) => void;
   addToast: (msg: string, type?: any) => void;
+  aiMode?: boolean;
 }
 
-export default function UploadModal({ type, subjects, onClose, onSuccess, addToast }: UploadModalProps) {
+const DAY_OPTIONS = [
+  { label: "月", value: 1 }, { label: "火", value: 2 }, { label: "水", value: 3 },
+  { label: "木", value: 4 }, { label: "金", value: 5 }, { label: "土", value: 6 },
+];
+
+export default function UploadModal({ type, subjects, onClose, onSuccess, addToast, aiMode = true }: UploadModalProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedSubjectId, setSelectedSubjectId] = useState("");
   const [manualSubjectName, setManualSubjectName] = useState("");
+
+  // 手動時間割フォーム用 state
+  const [manualForm, setManualForm] = useState({
+    name: "", dayOfWeek: "1", period: "1", professor: "", room: ""
+  });
+  const [manualSaving, setManualSaving] = useState(false);
 
   // プログレス管理
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -245,22 +257,111 @@ export default function UploadModal({ type, subjects, onClose, onSuccess, addToa
       <div className="modal-box" onClick={(e) => e.stopPropagation()}>
         <button className="modal-close" onClick={onClose}>×</button>
         <h2 className={styles.title}>
-          {type === "timetable" ? "📅 時間割を読み込む" : "📸 板書PDF/写真をアップロード"}
+          {type === "timetable"
+            ? (aiMode ? "📅 時間割を読み込む" : "📅 時間割を登録")
+            : "📸 板書PDF/写真をアップロード"}
         </h2>
         <p className={styles.subtitle}>
           {type === "timetable"
-            ? "時間割の写真、スクリーンショット、またはPDFをアップロードしてください。AIが科目と時限を自動で読み取ります。"
-            : "写真やPDFの各ページをまとめてアップロードできます（最大30枚相当）。AIが自動で科目に振り分けます。"}
+            ? (aiMode
+              ? "時間割の写真、スクリーンショット、またはPDFをアップロードしてください。AIが科目と時限を自動で読み取ります。"
+              : "科目名・曜日・時限を直接入力して登録。AI不要・即度完了。")
+            : (aiMode
+              ? "写真やPDFの各ページをまとめてアップロードできます（最大30枚相当）。AIが自動で科目に振り分けます。"
+              : "科目を選んで即アップロード。AI不要・爆速。")}
         </p>
+
+        {/* 手動時間割フォーム（AIoff + 時間割登録） */}
+        {type === "timetable" && !aiMode && (
+          <div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div>
+                <label className="label">科目名 *</label>
+                <input
+                  className="input"
+                  placeholder="例: 応用数学、英語コミュニケーション"
+                  value={manualForm.name}
+                  onChange={(e) => setManualForm({ ...manualForm, name: e.target.value })}
+                  autoFocus
+                />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div>
+                  <label className="label">曜日</label>
+                  <select className="input" value={manualForm.dayOfWeek} onChange={(e) => setManualForm({ ...manualForm, dayOfWeek: e.target.value })}>
+                    {DAY_OPTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}曜日</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">時限</label>
+                  <select className="input" value={manualForm.period} onChange={(e) => setManualForm({ ...manualForm, period: e.target.value })}>
+                    {[1,2,3,4,5,6].map((n) => <option key={n} value={n}>{n}限</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div>
+                  <label className="label">教授名（任意）</label>
+                  <input className="input" placeholder="田中教授" value={manualForm.professor} onChange={(e) => setManualForm({ ...manualForm, professor: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">教室（任意）</label>
+                  <input className="input" placeholder="101教室" value={manualForm.room} onChange={(e) => setManualForm({ ...manualForm, room: e.target.value })} />
+                </div>
+              </div>
+            </div>
+            <div className={styles.actions} style={{ marginTop: 20 }}>
+              <button className="btn btn-secondary" onClick={onClose}>キャンセル</button>
+              <button
+                className="btn btn-primary"
+                disabled={!manualForm.name.trim() || manualSaving}
+                onClick={async () => {
+                  setManualSaving(true);
+                  try {
+                    const res = await fetch("/api/subjects", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        name: manualForm.name.trim(),
+                        dayOfWeek: manualForm.dayOfWeek,
+                        period: manualForm.period,
+                        professor: manualForm.professor || null,
+                        room: manualForm.room || null,
+                      }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error);
+                    onSuccess({ subjects: [data], count: 1 });
+                  } catch (err: any) {
+                    addToast(err.message || "登録に失敗しました", "error");
+                  } finally {
+                    setManualSaving(false);
+                  }
+                }}
+              >
+                {manualSaving ? (
+                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
+                    登録中...
+                  </span>
+                ) : "✓ 登録する"}
+              </button>
+            </div>
+          </div>
+        )}
 
         {type === "board" && (
           <div className={styles.subjectSelect}>
-            <label className="label">科目を指定（AI判定なしで高速アップロード）</label>
+            <label className="label">
+              {aiMode ? "科目を指定（AI判定なしで高速アップロード）" : "科目を選択 *"}
+            </label>
             <select className="input" value={selectedSubjectId} onChange={(e) => setSelectedSubjectId(e.target.value)}>
-              <option value="">🤖 AIが自動で判定する</option>
+              {aiMode && <option value="">🤖 AIが自動で判定する</option>}
+              {!aiMode && <option value="">— 選んでください —</option>}
               {subjects.map((s: any) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
+            </select>
             </select>
             <p className={styles.subjectHint}>
               既存科目を選ぶか、下に科目名を直接入力するとAI判定をスキップしてダイレクト保存できます。

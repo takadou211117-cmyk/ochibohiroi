@@ -27,6 +27,21 @@ export default function Dashboard() {
   const [editingNote, setEditingNote] = useState<any>(null);
   const [uploadModal, setUploadModal] = useState<"timetable" | "board" | null>(null);
   const [toasts, setToasts] = useState<ToastType[]>([]);
+  const [aiMode, setAiMode] = useState<boolean>(true);
+
+  // AIモードをlocalStorageから復元
+  useEffect(() => {
+    const saved = localStorage.getItem("saburai_ai_mode");
+    if (saved !== null) setAiMode(saved === "true");
+  }, []);
+
+  const toggleAiMode = () => {
+    setAiMode((prev) => {
+      const next = !prev;
+      localStorage.setItem("saburai_ai_mode", String(next));
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
@@ -87,6 +102,8 @@ export default function Dashboard() {
         onSignOut={() => signOut({ callbackUrl: "/login" })}
         onProfileUpdate={fetchUser}
         addToast={addToast}
+        aiMode={aiMode}
+        onAiModeToggle={toggleAiMode}
       />
 
       <main className={styles.main}>
@@ -102,8 +119,9 @@ export default function Dashboard() {
             session={selectedSession}
             onBack={() => setSelectedSession(null)}
             onEditNote={setEditingNote}
-            onRefresh={() => {/* セッション詳細は内部でデータ更新するため不要 */}}
+            onRefresh={() => {}}
             addToast={addToast}
+            aiMode={aiMode}
           />
         ) : activeView === "timetable" ? (
           <TimetableView
@@ -121,6 +139,7 @@ export default function Dashboard() {
             addToast={addToast}
             onUploadBoard={() => setUploadModal("board")}
             onUploadTimetable={() => setUploadModal("timetable")}
+            aiMode={aiMode}
           />
         )}
       </main>
@@ -132,6 +151,7 @@ export default function Dashboard() {
           onClose={() => setUploadModal(null)}
           onSuccess={(data) => handleUploadSuccess(uploadModal, data)}
           addToast={addToast}
+          aiMode={aiMode}
         />
       )}
 

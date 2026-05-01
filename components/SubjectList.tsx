@@ -11,9 +11,10 @@ interface Props {
   addToast: (msg: string, type?: any) => void;
   onUploadBoard: () => void;
   onUploadTimetable: () => void;
+  aiMode?: boolean;
 }
 
-export default function SubjectList({ subjects, selectedSubject, onSelectSubject, onSelectSession, onRefresh, addToast, onUploadBoard, onUploadTimetable }: Props) {
+export default function SubjectList({ subjects, selectedSubject, onSelectSubject, onSelectSession, onRefresh, addToast, onUploadBoard, onUploadTimetable, aiMode = true }: Props) {
   const [sessions, setSessions] = useState<any[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [addingSubject, setAddingSubject] = useState(false);
@@ -235,7 +236,7 @@ export default function SubjectList({ subjects, selectedSubject, onSelectSubject
               <div className={styles.sessionRight}>
                 {session.note ? (
                   <span className={styles.noteExistsBadge}>📖 ノートあり</span>
-                ) : (
+                ) : aiMode ? (
                   <>
                     <button
                       className="btn btn-primary btn-sm"
@@ -270,7 +271,8 @@ export default function SubjectList({ subjects, selectedSubject, onSelectSubject
                       <div className={styles.noteLimitHint}>最大12枚までの写真でノート生成します</div>
                     )}
                   </>
-                )}
+                ) : null}
+
               </div>
             </div>
           ))}

@@ -13,9 +13,10 @@ interface Props {
   onEditNote: (note: any) => void;
   onRefresh: () => void;
   addToast: (msg: string, type?: any) => void;
+  aiMode?: boolean;
 }
 
-export default function SessionView({ session, onBack, onEditNote, onRefresh, addToast }: Props) {
+export default function SessionView({ session, onBack, onEditNote, onRefresh, addToast, aiMode = true }: Props) {
   const [selectedPhoto, setSelectedPhoto] = useState<any>(null);
   const [editingMemo, setEditingMemo] = useState<string | null>(null);
   const [memoText, setMemoText] = useState("");
@@ -314,7 +315,7 @@ export default function SessionView({ session, onBack, onEditNote, onRefresh, ad
               <button className="btn btn-secondary btn-sm" onClick={() => onEditNote(s.note)}>
                 ✏️ 編集する
               </button>
-            ) : (
+            ) : aiMode ? (
               <button
                 className="btn btn-primary btn-sm"
                 disabled={s.photos.length === 0 || generatingNote}
@@ -330,8 +331,17 @@ export default function SessionView({ session, onBack, onEditNote, onRefresh, ad
                   "✨ AIノート生成"
                 )}
               </button>
-            )}
+            ) : null}
           </div>
+          {!s.note && !aiMode && (
+            <div style={{
+              padding: "10px 14px", borderRadius: 8, marginBottom: 12,
+              background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)",
+              fontSize: 13, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 8
+            }}>
+              ⚡ アナログモード中 — AIノート生成は無効です
+            </div>
+          )}
           {!s.note && s.photos.length > NOTE_IMAGE_LIMIT && (
             <div className={styles.limitNotice}>
               このセッションには{s.photos.length}枚の写真があります。ノート生成には最大{NOTE_IMAGE_LIMIT}枚を使用します。

@@ -11,9 +11,11 @@ interface SidebarProps {
   onSignOut: () => void;
   onProfileUpdate: () => void;
   addToast: (msg: string, type?: any) => void;
+  aiMode: boolean;
+  onAiModeToggle: () => void;
 }
 
-export default function Sidebar({ user, activeView, onViewChange, onUploadTimetable, onUploadBoard, onSignOut, onProfileUpdate, addToast }: SidebarProps) {
+export default function Sidebar({ user, activeView, onViewChange, onUploadTimetable, onUploadBoard, onSignOut, onProfileUpdate, addToast, aiMode, onAiModeToggle }: SidebarProps) {
   const [editingProfile, setEditingProfile] = useState(false);
   const [form, setForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
@@ -124,10 +126,41 @@ export default function Sidebar({ user, activeView, onViewChange, onUploadTimeta
 
       <div className="divider" />
 
+      {/* AI Mode Toggle */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "10px 4px", marginBottom: 8,
+      }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
+            {aiMode ? "🤖 AIモード" : "⚡ アナログモード"}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+            {aiMode ? "AI解析・ノート生成有効" : "アナログ等速模式"}
+          </div>
+        </div>
+        <button
+          onClick={onAiModeToggle}
+          style={{
+            position: "relative", width: 44, height: 24, borderRadius: 12,
+            background: aiMode ? "var(--accent-1)" : "rgba(255,255,255,0.12)",
+            border: "none", cursor: "pointer", transition: "background 0.2s", flexShrink: 0,
+          }}
+          title={aiMode ? "AIをオフにする" : "AIをオンにする"}
+        >
+          <span style={{
+            position: "absolute", top: 3, left: aiMode ? 23 : 3,
+            width: 18, height: 18, borderRadius: "50%",
+            background: "#fff", transition: "left 0.2s",
+            boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+          }} />
+        </button>
+      </div>
+
       {/* Actions */}
       <div className={styles.actions}>
         <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={onUploadTimetable}>
-          📅 時間割を読み込む
+          {aiMode ? "📅 時間割を読み込む" : "📅 時間割を登録"}
         </button>
         <button className="btn btn-primary" style={{width:"100%",justifyContent:"center"}} onClick={onUploadBoard}>
           📸 板書をアップロード
