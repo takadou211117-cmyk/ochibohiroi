@@ -112,33 +112,56 @@
   margin-top: 2px;
 }
 
-.progressBar {
+/* === プログレスブロック（%表示） === */
+.progressBlock {
   margin-bottom: 16px;
+  padding: 16px 18px;
+  background: rgba(139, 92, 246, 0.06);
+  border: 1px solid rgba(139, 92, 246, 0.18);
+  border-radius: 10px;
+  animation: fadeInUp 0.25s ease;
 }
 
-.progressText {
+.progressTopRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.progressPhase {
   font-size: 13px;
   color: var(--text-secondary);
-  margin-bottom: 6px;
+  font-weight: 500;
 }
 
-.bar {
-  height: 4px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 2px;
+.progressPct {
+  font-size: 22px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #818cf8, #a78bfa, #c084fc);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  min-width: 52px;
+  text-align: right;
+}
+
+.progressTrack {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
   overflow: hidden;
 }
 
-.barFill {
+.progressFill {
   height: 100%;
-  background: var(--gradient-main);
-  animation: progress 1.5s ease-in-out infinite;
-}
-
-@keyframes progress {
-  0% { width: 10%; margin-left: 0; }
-  50% { width: 60%; margin-left: 20%; }
-  100% { width: 10%; margin-left: 90%; }
+  background: linear-gradient(90deg, #818cf8, #a78bfa, #c084fc);
+  border-radius: 999px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
 }
 
 .actions {

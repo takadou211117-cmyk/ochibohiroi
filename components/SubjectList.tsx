@@ -19,6 +19,7 @@ export default function SubjectList({ subjects, selectedSubject, onSelectSubject
   const [addingSubject, setAddingSubject] = useState(false);
   const [newSubjectName, setNewSubjectName] = useState("");
   const [generating, setGenerating] = useState<string | null>(null);
+  const [genProgress, setGenProgress] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (selectedSubject) fetchSessions(selectedSubject.id);
@@ -73,6 +74,17 @@ export default function SubjectList({ subjects, selectedSubject, onSelectSubject
   const handleGenerateNote = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
     setGenerating(sessionId);
+    setGenProgress((p) => ({ ...p, [sessionId]: 0 }));
+
+    const ESTIMATED_MS = 20000;
+    const INTERVAL_MS = 300;
+    const maxFake = 92;
+    let current = 0;
+    const timer = setInterval(() => {
+      current += (maxFake - current) * (INTERVAL_MS / ESTIMATED_MS) * 2.5;
+      setGenProgress((p) => ({ ...p, [sessionId]: Math.min(current, maxFake) }));
+    }, INTERVAL_MS);
+
     try {
       const res = await fetch("/api/notes", {
         method: "POST",
@@ -80,13 +92,20 @@ export default function SubjectList({ subjects, selectedSubject, onSelectSubject
         body: JSON.stringify({ sessionId }),
       });
       const data = await res.json();
+      clearInterval(timer);
       if (!res.ok) throw new Error(data.error);
+      setGenProgress((p) => ({ ...p, [sessionId]: 100 }));
+      addToast("✨ AIノートを生成しました");
       fetchSessions(selectedSubject.id);
-      addToast("AIノートを生成しました ✨");
+      setTimeout(() => {
+        setGenerating(null);
+        setGenProgress((p) => { const n = { ...p }; delete n[sessionId]; return n; });
+      }, 600);
     } catch (err: any) {
-      addToast(err.message || "ノート生成に失敗しました", "error");
-    } finally {
+      clearInterval(timer);
       setGenerating(null);
+      setGenProgress((p) => { const n = { ...p }; delete n[sessionId]; return n; });
+      addToast(err.message || "ノート生成に失敗しました", "error");
     }
   };
 
@@ -222,10 +241,32 @@ export default function SubjectList({ subjects, selectedSubject, onSelectSubject
                       className="btn btn-primary btn-sm"
                       disabled={generating === session.id || getPhotoCount(session) === 0}
                       onClick={(e) => { e.stopPropagation(); handleGenerateNote(e, session.id); }}
+                      style={{ minWidth: 120 }}
                     >
-                      {generating === session.id ? "生成中..." : "✨ AIノート生成"}
+                      {generating === session.id ? (
+                        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} />
+                          {Math.round(genProgress[session.id] ?? 0)}%
+                        </span>
+                      ) : "✨ AIノート生成"}
                     </button>
-                    {getPhotoCount(session) > 12 && (
+                    {generating === session.id && (
+                      <div style={{ width: "100%", marginTop: 6 }}>
+                        <div style={{
+                          height: 4, background: "rgba(255,255,255,0.06)",
+                          borderRadius: 999, overflow: "hidden"
+                        }}>
+                          <div style={{
+                            height: "100%",
+                            width: `${genProgress[session.id] ?? 0}%`,
+                            background: "linear-gradient(90deg, #818cf8, #c084fc)",
+                            borderRadius: 999,
+                            transition: "width 0.3s cubic-bezier(0.4,0,0.2,1)"
+                          }} />
+                        </div>
+                      </div>
+                    )}
+                    {getPhotoCount(session) > 12 && !generating && (
                       <div className={styles.noteLimitHint}>最大12枚までの写真でノート生成します</div>
                     )}
                   </>

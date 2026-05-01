@@ -14,15 +14,9 @@ const compressImage = async (file: File, maxWidth = 900, quality = 0.55): Promis
         let height = img.height;
 
         if (width > height) {
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          }
+          if (width > maxWidth) { height = Math.round((height * maxWidth) / width); width = maxWidth; }
         } else {
-          if (height > maxWidth) {
-            width = Math.round((width * maxWidth) / height);
-            height = maxWidth;
-          }
+          if (height > maxWidth) { width = Math.round((width * maxWidth) / height); height = maxWidth; }
         }
 
         const canvas = document.createElement("canvas");
@@ -78,7 +72,6 @@ const pdfToImages = async (file: File): Promise<File[]> => {
   const pageCount = pdf.numPages;
   const pagesToConvert = Math.min(pageCount, 20);
 
-  // 並列変換（逐次 for ループ → Promise.all で高速化）
   const pageNumbers = Array.from({ length: pagesToConvert }, (_, i) => i + 1);
   const imageFiles = await Promise.all(
     pageNumbers.map(async (pageNumber) => {
@@ -106,16 +99,19 @@ export default function UploadModal({ type, subjects, onClose, onSuccess, addToa
   const [uploading, setUploading] = useState(false);
   const [selectedSubjectId, setSelectedSubjectId] = useState("");
   const [manualSubjectName, setManualSubjectName] = useState("");
-  const [progress, setProgress] = useState("");
+
+  // プログレス管理
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadPhase, setUploadPhase] = useState("");
+  const uploadTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const inputRef = useRef<HTMLInputElement>(null);
 
   const addFiles = (newFiles: File[]) => {
     const validImages = newFiles.filter((f) => f.type.startsWith("image/"));
     const validPdfs = newFiles.filter(isPdf);
     const validFiles = [...validImages, ...validPdfs];
-
     if (!validFiles.length) return;
-
     if (type === "timetable") {
       setFiles([validFiles[0]]);
     } else {
@@ -129,21 +125,27 @@ export default function UploadModal({ type, subjects, onClose, onSuccess, addToa
     addFiles(Array.from(e.dataTransfer.files));
   };
 
-  const dataUrlToFile = (dataUrl: string, filename: string): File => {
-    const arr = dataUrl.split(",");
-    const mime = arr[0].match(/:(.*?);/)?.[1] || "image/jpeg";
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) {
-      u8arr[n] = bstr.charCodeAt(n);
-    }
-    return new File([u8arr], filename, { type: mime, lastModified: Date.now() });
+  // フェーズ付きプログレス更新ヘルパー
+  const startPhaseProgress = (phase: string, fromPct: number, toPct: number, durationMs: number) => {
+    setUploadPhase(phase);
+    setUploadProgress(fromPct);
+    if (uploadTimerRef.current) clearInterval(uploadTimerRef.current);
+    const INTERVAL = 250;
+    let current = fromPct;
+    uploadTimerRef.current = setInterval(() => {
+      current += (toPct - current) * (INTERVAL / durationMs) * 2;
+      setUploadProgress(Math.min(current, toPct));
+    }, INTERVAL);
+  };
+
+  const stopProgress = () => {
+    if (uploadTimerRef.current) { clearInterval(uploadTimerRef.current); uploadTimerRef.current = null; }
   };
 
   const handleUpload = async () => {
     if (!files.length) return;
     setUploading(true);
+    setUploadProgress(0);
 
     try {
       const imageFiles: File[] = [];
@@ -151,9 +153,11 @@ export default function UploadModal({ type, subjects, onClose, onSuccess, addToa
       const rawImages = files.filter((f) => f.type.startsWith("image/"));
 
       if (pdfFiles.length) {
-        setProgress("PDFを画像に変換中...");
+        startPhaseProgress("📄 PDFを画像に変換中...", 0, 20, 4000);
         const converted = await Promise.all(pdfFiles.map((pdf) => pdfToImages(pdf)));
         imageFiles.push(...converted.flat());
+        stopProgress();
+        setUploadProgress(20);
       }
 
       imageFiles.push(...rawImages);
@@ -163,20 +167,40 @@ export default function UploadModal({ type, subjects, onClose, onSuccess, addToa
       }
 
       const formData = new FormData();
+
       if (type === "timetable") {
         const sourceFile = imageFiles[0];
-        setProgress("画像を圧縮中...");
+
+        // フェーズ1: 圧縮 (→25%)
+        startPhaseProgress("🗜️ 画像を圧縮中...", pdfFiles.length ? 20 : 0, 25, 1500);
         const compressed = await compressImage(sourceFile, 800, 0.5);
+        stopProgress();
+        setUploadProgress(25);
+
+        // フェーズ2: AI解析 (25→95%)
+        startPhaseProgress("🧠 AIが時間割を解析中...", 25, 95, 12000);
         formData.append("image", compressed);
-        setProgress("AIが時間割を解析中...");
         const res = await fetch("/api/timetable", { method: "POST", body: formData });
         const data = await res.json();
+        stopProgress();
         if (!res.ok) throw new Error(data.error || "時間割読み取りに失敗しました");
+
+        setUploadPhase("✅ 完了！");
+        setUploadProgress(100);
+        await new Promise((r) => setTimeout(r, 400));
         onSuccess(data);
+
       } else {
         const selectedFiles = imageFiles.slice(0, 30);
-        setProgress(`${selectedFiles.length}枚の画像を圧縮中...`);
+        const totalFiles = selectedFiles.length;
+
+        // フェーズ1: 圧縮 (→40%)
+        const compressStart = pdfFiles.length ? 20 : 0;
+        startPhaseProgress(`🗜️ ${totalFiles}枚を圧縮中...`, compressStart, 40, Math.max(totalFiles * 400, 1500));
         const compressedFiles = await Promise.all(selectedFiles.map((f) => compressImage(f)));
+        stopProgress();
+        setUploadProgress(40);
+
         for (const file of compressedFiles) {
           formData.append("photos", file);
         }
@@ -185,17 +209,32 @@ export default function UploadModal({ type, subjects, onClose, onSuccess, addToa
         } else if (manualSubjectName.trim()) {
           formData.append("subjectName", manualSubjectName.trim());
         }
-        setProgress(`${compressedFiles.length}枚の写真をアップロード中...`);
+
+        // フェーズ2: アップロード + AI判定 (40→95%)
+        const hasAiDetection = !selectedSubjectId && !manualSubjectName.trim();
+        const phase2Label = hasAiDetection
+          ? `📡 ${totalFiles}枚をアップロード中（AI科目判定あり）...`
+          : `📡 ${totalFiles}枚をアップロード中...`;
+        startPhaseProgress(phase2Label, 40, 95, hasAiDetection ? 10000 : 5000);
+
         const res = await fetch("/api/sessions", { method: "POST", body: formData });
         const data = await res.json();
+        stopProgress();
         if (!res.ok) throw new Error(data.error || "板書アップロードに失敗しました");
+
+        setUploadPhase("✅ 完了！");
+        setUploadProgress(100);
+        await new Promise((r) => setTimeout(r, 400));
         onSuccess(data);
       }
     } catch (err: any) {
+      stopProgress();
+      setUploadProgress(0);
+      setUploadPhase("");
       addToast(err.message || "アップロードに失敗しました", "error");
     } finally {
       setUploading(false);
-      setProgress("");
+      stopProgress();
     }
   };
 
@@ -260,7 +299,7 @@ export default function UploadModal({ type, subjects, onClose, onSuccess, addToa
           <div className={styles.zoneHint}>JPG, PNG, HEIC, PDF対応</div>
         </div>
 
-        {files.length > 0 && (
+        {files.length > 0 && !uploading && (
           <div className={styles.previews}>
             {files.map((f, i) => (
               <div key={i} className={styles.previewItem}>
@@ -280,9 +319,17 @@ export default function UploadModal({ type, subjects, onClose, onSuccess, addToa
         )}
 
         {uploading && (
-          <div className={styles.progressBar}>
-            <div className={styles.progressText}>{progress}</div>
-            <div className={styles.bar}><div className={styles.barFill} /></div>
+          <div className={styles.progressBlock}>
+            <div className={styles.progressTopRow}>
+              <span className={styles.progressPhase}>{uploadPhase}</span>
+              <span className={styles.progressPct}>{Math.round(uploadProgress)}%</span>
+            </div>
+            <div className={styles.progressTrack}>
+              <div
+                className={styles.progressFill}
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
           </div>
         )}
 
@@ -292,10 +339,14 @@ export default function UploadModal({ type, subjects, onClose, onSuccess, addToa
             className="btn btn-primary"
             onClick={handleUpload}
             disabled={!files.length || uploading}
+            style={{ minWidth: 160 }}
           >
-            {uploading
-              ? "処理中..."
-              : type === "timetable"
+            {uploading ? (
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
+                {Math.round(uploadProgress)}%
+              </span>
+            ) : type === "timetable"
               ? "AIで読み取る"
               : (selectedSubjectId || manualSubjectName.trim())
               ? "AIなしで直接アップロード"

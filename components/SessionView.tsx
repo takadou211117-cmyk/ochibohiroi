@@ -22,6 +22,8 @@ export default function SessionView({ session, onBack, onEditNote, onRefresh, ad
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [generatingNote, setGeneratingNote] = useState(false);
+  const [noteProgress, setNoteProgress] = useState(0);
   // photos はオンデマンド取得（一覧では軽量データのみ）
   const [fullSession, setFullSession] = useState<any>(session);
   const [loadingFull, setLoadingFull] = useState(
@@ -159,7 +161,19 @@ export default function SessionView({ session, onBack, onEditNote, onRefresh, ad
   };
 
   const handleGenerateNote = async () => {
-    addToast("AIがノートを生成しています...", "info");
+    setGeneratingNote(true);
+    setNoteProgress(0);
+
+    // 推定進捗アニメーション（返り値は実際の進捗に非連動）
+    const ESTIMATED_MS = 20000; // 約2秒が目安
+    const INTERVAL_MS = 300;
+    const maxFake = 92; // 100%はAI完了時のみ
+    let current = 0;
+    const timer = setInterval(() => {
+      current += (maxFake - current) * (INTERVAL_MS / ESTIMATED_MS) * 2.5;
+      setNoteProgress(Math.min(current, maxFake));
+    }, INTERVAL_MS);
+
     try {
       const res = await fetch("/api/notes", {
         method: "POST",
@@ -167,13 +181,21 @@ export default function SessionView({ session, onBack, onEditNote, onRefresh, ad
         body: JSON.stringify({ sessionId: s.id }),
       });
       const data = await res.json();
+      clearInterval(timer);
       if (!res.ok) throw new Error(data.error);
-      addToast("ノートを生成しました！", "success");
-      // ノート生成後に完全データを再取得
+
+      // 100%にジャンプしてからリフレッシュ
+      setNoteProgress(100);
+      addToast("✨ ノートを生成しました！", "success");
       const refreshed = await fetch(`/api/sessions?sessionId=${session.id}`);
       if (refreshed.ok) setFullSession(await refreshed.json());
       onRefresh();
+      // 短い遅延の後にバーを消す
+      setTimeout(() => { setGeneratingNote(false); setNoteProgress(0); }, 600);
     } catch (err: any) {
+      clearInterval(timer);
+      setNoteProgress(0);
+      setGeneratingNote(false);
       addToast(err.message || "ノート生成に失敗しました", "error");
     }
   };
@@ -295,10 +317,18 @@ export default function SessionView({ session, onBack, onEditNote, onRefresh, ad
             ) : (
               <button
                 className="btn btn-primary btn-sm"
-                disabled={s.photos.length === 0}
+                disabled={s.photos.length === 0 || generatingNote}
                 onClick={handleGenerateNote}
+                style={{ minWidth: 140 }}
               >
-                ✨ AIノート生成
+                {generatingNote ? (
+                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
+                    {Math.round(noteProgress)}%
+                  </span>
+                ) : (
+                  "✨ AIノート生成"
+                )}
               </button>
             )}
           </div>
@@ -311,6 +341,25 @@ export default function SessionView({ session, onBack, onEditNote, onRefresh, ad
           {s.note ? (
             <div className={`glass ${styles.noteCard} markdown-body`}>
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{s.note.content}</ReactMarkdown>
+            </div>
+          ) : generatingNote ? (
+            <div className={styles.generatingCard}>
+              <div className={styles.generatingHeader}>
+                <span className={styles.generatingLabel}>🧠 AIが板書を解析中...</span>
+                <span className={styles.generatingPercent}>{Math.round(noteProgress)}%</span>
+              </div>
+              <div className={styles.progressTrack}>
+                <div
+                  className={styles.progressFill}
+                  style={{ width: `${noteProgress}%` }}
+                />
+              </div>
+              <p className={styles.generatingHint}>
+                {noteProgress < 30 ? "画像を読み込んでいます..."
+                  : noteProgress < 60 ? "Gemini AIが板書を解読中..."
+                  : noteProgress < 85 ? "ノートを構築中..."
+                  : "もうすぐ完成！"}
+              </p>
             </div>
           ) : (
             <div className={styles.emptyCard}>
