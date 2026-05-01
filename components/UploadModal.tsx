@@ -362,7 +362,6 @@ export default function UploadModal({ type, subjects, onClose, onSuccess, addToa
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
-            </select>
             <p className={styles.subjectHint}>
               既存科目を選ぶか、下に科目名を直接入力するとAI判定をスキップしてダイレクト保存できます。
             </p>
