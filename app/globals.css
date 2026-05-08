@@ -575,4 +575,33 @@ select option {
   .modal-box {
     padding: 24px 20px;
   }
+
+  /* パフォーマンス最適化（スマホ向け） */
+  .glass {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    background: rgba(25, 25, 40, 0.7); /* ぼかしを減らす分、少し暗くして視認性を確保 */
+  }
+
+  body::before,
+  body::after {
+    animation: none; /* 重い背景アニメーションを停止 */
+    opacity: 0.6;
+  }
+
+  .btn-primary::after {
+    display: none; /* ボタンの光るアニメーションをオフ */
+  }
+}
+
+/* 視差効果を減らす設定（OS設定）を尊重し、不要なアニメーションを全カット */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
