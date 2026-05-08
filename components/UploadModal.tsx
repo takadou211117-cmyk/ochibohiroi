@@ -65,6 +65,7 @@ const pdfPageToFile = async (pdfPage: any, pageNumber: number, originalName: str
 const pdfToImages = async (file: File): Promise<File[]> => {
   const arrayBuffer = await file.arrayBuffer();
   const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf");
+  // @ts-ignore
   const pdfWorker = await import("pdfjs-dist/build/pdf.worker.min.js");
   pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker.default || pdfWorker;
 
