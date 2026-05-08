@@ -43,7 +43,6 @@ export async function analyzeImageWithGemini(
       }],
       config: {
         responseMimeType: "application/json",
-        thinkingConfig: { thinkingBudget: 0 },
       },
     });
     const raw = response.text || "";
@@ -66,7 +65,6 @@ export async function analyzeImageWithGemini(
         }],
         config: {
           responseMimeType: "application/json",
-          thinkingConfig: { thinkingBudget: 0 },
         },
       });
       const raw = response.text || "";
@@ -100,7 +98,6 @@ export async function analyzeMultipleImagesWithGemini(
         model,
         contents: [{ role: "user", parts }],
         config: { 
-          thinkingConfig: { thinkingBudget: 0 },
           maxOutputTokens: 800, // 生成上限を設けて速度を担保
         },
       });
