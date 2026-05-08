@@ -69,11 +69,11 @@ export default function LoginPage() {
 
   const registerBiometric = async () => {
     if (!supportsCredentialManager) {
-      addToast("この端末はFace ID登録に対応していません", "error");
+      setError("この端末はFace ID登録に対応していません");
       return;
     }
     if (!email || !password) {
-      addToast("Face ID登録にはメールアドレスとパスワードの入力が必要です", "error");
+      setError("Face ID登録にはメールアドレスとパスワードの入力が必要です");
       return;
     }
 
@@ -84,9 +84,9 @@ export default function LoginPage() {
         name: email,
       });
       await navigator.credentials.store(passwordCredential);
-      addToast("Face IDに対応したパスワード管理を登録しました。次回からFace IDでログインできます。", "success");
+      alert("Face IDに対応したパスワード管理を登録しました。次回からFace IDでログインできます。");
     } catch (err: any) {
-      addToast(`Face ID登録に失敗しました: ${err?.message || "対応ブラウザをお試しください"}`, "error");
+      setError(`Face ID登録に失敗しました: ${err?.message || "対応ブラウザをお試しください"}`);
     }
   };
 
