@@ -24,14 +24,17 @@ export async function POST(req: NextRequest) {
       parsedSubjects = [
         { name: "デモ: AI基礎論", dayOfWeek: "月", period: 1, professor: "田中教授", room: "101教室" },
         { name: "デモ: データ科学", dayOfWeek: "火", period: 3, professor: null, room: null },
-        { name: "デモ: プログラミング演習", dayOfWeek: "水", period: 2, professor: "鈴木教授", room: "PC室A" },
-        { name: "デモ: 数理統計学", dayOfWeek: "木", period: 4, professor: null, room: null },
-        { name: "デモ: 情報理論", dayOfWeek: "金", period: 1, professor: "佐藤教授", room: "302教室" },
       ];
     } else {
       const bytes = await image.arrayBuffer();
       const base64 = Buffer.from(bytes).toString("base64");
-      const resultText = await analyzeImageWithGemini(base64, image.type, TIMETABLE_PROMPT);
+      
+      let resultText = "";
+      try {
+        resultText = await analyzeImageWithGemini(base64, image.type, TIMETABLE_PROMPT);
+      } catch (aiErr: any) {
+        throw new Error(`AI解析エラー: ${aiErr.message}`);
+      }
       
       // JSON パース（より堅牢に）
       let parsed: any;
@@ -47,10 +50,10 @@ export async function POST(req: NextRequest) {
           try {
             parsed = JSON.parse(jsonMatch[0]);
           } catch (e) {
-            throw new Error(`AIの応答をJSONとしてパースできませんでした: ${resultText.substring(0, 200)}`);
+            throw new Error(`AIの応答をJSONとしてパースできませんでした`);
           }
         } else {
-          throw new Error(`AIの応答にsubjectsデータが見つかりません: ${resultText.substring(0, 200)}`);
+          throw new Error(`AIの応答にsubjectsデータが見つかりません`);
         }
       }
 
@@ -60,12 +63,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // メモリ上で科目名ごとにグループ化（複数コマの同名科目の重複作成を防ぐため）
+    // メモリ上で科目名ごとにグループ化
     const subjectsMap = new Map();
     for (const s of parsedSubjects) {
       if (!s.name || !s.dayOfWeek) continue;
-      const dayOfWeek = dayNameToNumber(s.dayOfWeek);
+      
+      // 曜日文字列の正規化（"月曜日" -> "月"）
+      const dayStr = String(s.dayOfWeek).replace(/曜日/g, "").trim().charAt(0);
+      const dayOfWeek = dayNameToNumber(dayStr);
+      
+      // 無効な曜日や時限を弾く
+      if (dayOfWeek === -1) continue;
       const period = typeof s.period === "number" ? s.period : parseInt(s.period) || 1;
+      if (period < 1 || period > 7) continue;
 
       if (!subjectsMap.has(s.name)) {
         subjectsMap.set(s.name, {
@@ -84,8 +94,11 @@ export async function POST(req: NextRequest) {
     }
 
     const subjectNames = Array.from(subjectsMap.keys());
+    if (subjectNames.length === 0) {
+      return NextResponse.json({ error: "有効な授業データが見つかりませんでした" }, { status: 400 });
+    }
 
-    // 事前に既存科目とスケジュールをバッチで取得してDBクエリを削減
+    // 事前に既存科目とスケジュールをバッチで取得
     const existingSubjects = await prisma.subject.findMany({
       where: { userId: user!.id, name: { in: subjectNames } },
       include: { schedules: true },
@@ -97,7 +110,6 @@ export async function POST(req: NextRequest) {
         const existing = existingSubjectsByName.get(s.name);
 
         if (existing) {
-          console.log(`[Timetable] Subject already exists: ${s.name}, checking schedules`);
           const scheduleByKey = new Set(existing.schedules.map((sch) => `${sch.dayOfWeek}:${sch.period}`));
 
           await Promise.all(s.schedules.map(async (sch: any) => {
@@ -116,7 +128,6 @@ export async function POST(req: NextRequest) {
           }));
           return existing;
         } else {
-          console.log(`[Timetable] Creating new subject: ${s.name} with ${s.schedules.length} schedules`);
           const subject = await prisma.subject.create({
             data: {
               userId: user!.id,

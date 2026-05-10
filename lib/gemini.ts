@@ -59,9 +59,6 @@ export async function analyzeImageWithGemini(
             { inlineData: { mimeType, data: imageBase64 } },
           ],
         }],
-        config: {
-          responseMimeType: "application/json",
-        },
       });
       const raw = response.text || "";
       if (!raw.trim()) throw new Error("Empty response from Gemini");
