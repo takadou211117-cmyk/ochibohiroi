@@ -2,8 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 
 const apiKey = process.env.GEMINI_API_KEY;
 
-// すべてのタスクで最速モデルを強制
-const PRIMARY_MODEL = "gemini-2.0-flash";
+const PRIMARY_MODEL = "gemini-2.0-pro-exp-02-05"; // or gemini-2.5-pro if available, let's stick to gemini-2.5-flash or 2.0-flash which are stable. Let's use gemini-1.5-pro for best reasoning if 2.0-pro is not stable, or just stick to gemini-2.0-flash but improve prompts. Let's use gemini-2.0-flash as it is good, but without token limits.
 const FAST_MODEL = "gemini-2.0-flash";
 
 export function getGeminiClient() {
@@ -18,10 +17,6 @@ function cleanResponseText(text: string): string {
   return m ? m[1].trim() : cleaned;
 }
 
-/**
- * 単一画像のAI解析
- * @param fast true にすると gemini-2.0-flash を直接使用（フォールバックなし・高速）
- */
 export async function analyzeImageWithGemini(
   imageBase64: string,
   mimeType: string,
@@ -30,8 +25,8 @@ export async function analyzeImageWithGemini(
 ): Promise<string> {
   const ai = getGeminiClient();
 
+  // 単純タスク用: 2.0-flash を直接呼び出し
   if (fast) {
-    // 単純タスク用: 2.0-flash を直接呼び出し（ループなし = オーバーヘッドゼロ）
     const response = await ai.models.generateContent({
       model: FAST_MODEL,
       contents: [{
@@ -50,9 +45,10 @@ export async function analyzeImageWithGemini(
     return cleanResponseText(raw);
   }
 
-  // 精度重視タスク: PRIMARY → FALLBACK
+  // 精度重視タスク
   let lastError: Error | null = null;
-  for (const model of [PRIMARY_MODEL, FAST_MODEL]) {
+  // Use gemini-2.0-flash or gemini-1.5-pro
+  for (const model of ["gemini-1.5-pro", "gemini-2.0-flash"]) {
     try {
       const response = await ai.models.generateContent({
         model,
@@ -78,9 +74,6 @@ export async function analyzeImageWithGemini(
   throw lastError || new Error("All Gemini models failed");
 }
 
-/**
- * 複数画像のAI解析（ノート生成用）
- */
 export async function analyzeMultipleImagesWithGemini(
   images: { base64: string; mimeType: string }[],
   prompt: string
@@ -92,13 +85,13 @@ export async function analyzeMultipleImagesWithGemini(
   }
 
   let lastError: Error | null = null;
-  for (const model of [PRIMARY_MODEL, FAST_MODEL]) {
+  for (const model of ["gemini-1.5-pro", "gemini-2.0-flash"]) {
     try {
       const response = await ai.models.generateContent({
         model,
         contents: [{ role: "user", parts }],
         config: { 
-          maxOutputTokens: 800, // 生成上限を設けて速度を担保
+          // maxOutputTokens制限を削除して詳細なノートを生成可能にする
         },
       });
       const raw = response.text || "";
@@ -114,27 +107,45 @@ export async function analyzeMultipleImagesWithGemini(
 
 // ── プロンプト ──────────────────────────────────────────────────
 
-/**
- * 時間割パース用プロンプト（短縮版: ~120トークン）
- * 従来の ~500トークン から75%削減
- */
-export const TIMETABLE_PROMPT = `時間割表の全授業をJSONで返してください。
-縦=曜日(月火水木金土)、横=時限(1〜6)のグリッドです。
-ルール: 科目名が複数行なら連結する。教室番号・オンデマンド等はroomに入れる。連続時限は各時限ごとに別エントリで。
-出力フォーマット（JSONのみ、マークダウン不使用）:
-{"subjects":[{"name":"科目名","dayOfWeek":"月","period":1,"startTime":null,"endTime":null,"professor":null,"room":null}]}`;
+export const TIMETABLE_PROMPT = `時間割の画像から授業データを抽出し、以下のJSONスキーマに従って出力してください。
+必ずJSON形式で出力し、他のテキストやマークダウンブロック(\`\`\`json)などは含めないでください。
 
-/**
- * ノート生成用プロンプト（超爆速・要約特化版）
- */
-export const NOTE_GENERATION_PROMPT = `板書写真から試験対策の「要点まとめ」をMarkdownで超簡潔に作成してください。
+出力フォーマット:
+{"subjects":[{"name":"科目名","dayOfWeek":"月","period":1,"startTime":"09:00","endTime":"10:30","professor":"教員名","room":"教室名"}]}
+
+ルール:
+- 曜日(dayOfWeek)は "月", "火", "水", "木", "金", "土", "日" のいずれか
+- 時限(period)は 1〜7の数値
+- 連続するコマは、それぞれ別のオブジェクトとして配列に含めること
+- 該当する情報がない項目は null にすること
+- 抽出漏れがないように、画像内のすべての授業を網羅すること
+`;
+
+export const NOTE_GENERATION_PROMPT = `提供された複数の板書写真から、学習用の高品質なマークダウンノートを作成してください。
 
 要件:
-- 長文は書かず、箇条書きで極限まで短くまとめる
-- 最も重要な公式・キーワードのみを抽出
-- 余計な挨拶や説明は一切省く
+1. **構造化**: 見出し（#、##、###）を適切に使用し、情報の階層を明確にすること。
+2. **網羅性**: 写真に記載されている重要な定理、公式、概念、説明を可能な限り詳細に書き起こすこと。
+3. **視認性**:
+   - 重要なキーワードは太字（**文字**）にする
+   - 公式や数式はブロック（$$数式$$）やインライン（$数式$）で記述する
+   - 順序立てられたプロセスや手順は番号付きリスト（1. 2. 3.）を使用する
+   - 補足や注意点は引用ブロック（>）を使用する
+4. **論理的補完**: 写真の文字が一部見切れていたり読みにくい場合は、文脈から推測して自然な文章に補完すること。
 
-形式: # [科目名] → ## 重要ポイント → (箇条書き)`;
+出力の形式（例）:
+# [講義の主題または主要なトピック]
+
+## 重要な概念・定義
+- **〇〇の定義**: （説明）
+- ...
+
+## 詳細・解説
+（板書の内容を構造化して詳細に記載）
+
+## 重要公式・まとめ
+（公式や最終的な結論など）
+`;
 
 export function detectSubjectFromTimestamp(
   timestamp: Date,
