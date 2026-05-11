@@ -183,7 +183,10 @@ export default function SessionView({ session, onBack, onEditNote, onRefresh, ad
       });
       const data = await res.json();
       clearInterval(timer);
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) {
+        const errMsg = data.details ? `エラー: ${data.details}` : (data.error || "ノート生成に失敗しました");
+        throw new Error(errMsg);
+      }
 
       // 100%にジャンプしてからリフレッシュ
       setNoteProgress(100);

@@ -196,7 +196,10 @@ export default function UploadModal({ type, subjects, onClose, onSuccess, addToa
         const res = await fetch("/api/timetable", { method: "POST", body: formData });
         const data = await res.json();
         stopProgress();
-        if (!res.ok) throw new Error(data.error || "時間割読み取りに失敗しました");
+        if (!res.ok) {
+          const errMsg = data.details ? `エラー: ${data.details}` : (data.error || "時間割読み取りに失敗しました");
+          throw new Error(errMsg);
+        }
 
         setUploadPhase("✅ 完了！");
         setUploadProgress(100);

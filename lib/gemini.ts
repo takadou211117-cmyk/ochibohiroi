@@ -2,8 +2,8 @@ import { GoogleGenAI } from "@google/genai";
 
 const apiKey = process.env.GEMINI_API_KEY;
 
-const PRIMARY_MODEL = "gemini-2.0-pro-exp-02-05"; // or gemini-2.5-pro if available, let's stick to gemini-2.5-flash or 2.0-flash which are stable. Let's use gemini-1.5-pro for best reasoning if 2.0-pro is not stable, or just stick to gemini-2.0-flash but improve prompts. Let's use gemini-2.0-flash as it is good, but without token limits.
-const FAST_MODEL = "gemini-2.0-flash";
+// gemini-2.0-flash: 実績ある安定モデル（時間割・ノート生成ともに使用）
+const MODEL = "gemini-2.0-flash";
 
 export function getGeminiClient() {
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
@@ -45,30 +45,23 @@ export async function analyzeImageWithGemini(
     return cleanResponseText(raw);
   }
 
-  // 精度重視タスク
-  let lastError: Error | null = null;
-  // Use gemini-2.0-flash or gemini-1.5-pro
-  for (const model of ["gemini-1.5-pro", "gemini-2.0-flash"]) {
-    try {
-      const response = await ai.models.generateContent({
-        model,
-        contents: [{
-          role: "user",
-          parts: [
-            { text: prompt },
-            { inlineData: { mimeType, data: imageBase64 } },
-          ],
-        }],
-      });
-      const raw = response.text || "";
-      if (!raw.trim()) throw new Error("Empty response from Gemini");
-      return cleanResponseText(raw);
-    } catch (err: any) {
-      lastError = err;
-      continue;
-    }
-  }
-  throw lastError || new Error("All Gemini models failed");
+  // 精度重視タスク: gemini-2.0-flash で JSON モード強制
+  const response = await ai.models.generateContent({
+    model: MODEL,
+    contents: [{
+      role: "user",
+      parts: [
+        { text: prompt },
+        { inlineData: { mimeType, data: imageBase64 } },
+      ],
+    }],
+    config: {
+      responseMimeType: "application/json",
+    },
+  });
+  const raw = response.text || "";
+  if (!raw.trim()) throw new Error("Gemini returned empty response");
+  return cleanResponseText(raw);
 }
 
 export async function analyzeMultipleImagesWithGemini(
@@ -81,25 +74,13 @@ export async function analyzeMultipleImagesWithGemini(
     parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
   }
 
-  let lastError: Error | null = null;
-  for (const model of ["gemini-1.5-pro", "gemini-2.0-flash"]) {
-    try {
-      const response = await ai.models.generateContent({
-        model,
-        contents: [{ role: "user", parts }],
-        config: { 
-          // maxOutputTokens制限を削除して詳細なノートを生成可能にする
-        },
-      });
-      const raw = response.text || "";
-      if (!raw.trim()) throw new Error("Empty response from Gemini");
-      return cleanResponseText(raw);
-    } catch (err: any) {
-      lastError = err;
-      continue;
-    }
-  }
-  throw lastError || new Error("All Gemini models failed");
+  const response = await ai.models.generateContent({
+    model: MODEL,
+    contents: [{ role: "user", parts }],
+  });
+  const raw = response.text || "";
+  if (!raw.trim()) throw new Error("Gemini returned empty response");
+  return cleanResponseText(raw);
 }
 
 // ── プロンプト ──────────────────────────────────────────────────
